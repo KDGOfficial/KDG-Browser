@@ -218,15 +218,17 @@ export default function App() {
         activeSec = 'home';
       }
     } else {
-      const isUrl = /^(https?:\/\/)?([\da-z.-]+)\.([a-z.]{2,6})([/\w .-]*)*\/?$/i;
-      const isIp  = /^(https?:\/\/)?localhost(:\d+)?/i;
-      if (!isUrl.test(clean) && !isIp.test(clean)) {
+      const isExplicitUrl = /^(https?:\/\/)/i.test(clean);
+      const isImplicitUrl = /^([\da-z.-]+)\.([a-z.]{2,6})([/\w .?&=%#-]*)*\/?$/i.test(clean);
+      const isIp = /^(https?:\/\/)?(localhost|127\.0\.0\.1|\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})(:\d+)?(\/.*)?$/i.test(clean);
+
+      if (!isExplicitUrl && !isImplicitUrl && !isIp) {
         let searchUrl = 'https://www.google.com/search?q=';
         if (settings.searchEngine === 'yandex') searchUrl = 'https://yandex.ru/search/?text=';
         else if (settings.searchEngine === 'bing') searchUrl = 'https://www.bing.com/search?q=';
         else if (settings.searchEngine === 'duckduckgo') searchUrl = 'https://duckduckgo.com/?q=';
         clean = `${searchUrl}${encodeURIComponent(clean)}`;
-      } else if (!clean.startsWith('http')) {
+      } else if (!isExplicitUrl) {
         clean = `https://${clean}`;
       }
     }
