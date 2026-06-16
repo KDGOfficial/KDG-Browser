@@ -1,0 +1,500 @@
+import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { BrainCircuit, Settings as SettingsIcon, X } from 'lucide-react';
+import { Header }        from './components/Header';
+import { Navigation }    from './components/Navigation';
+import { Home }          from './pages/Home';
+import { Search }        from './pages/Search';
+import { Favorites }     from './pages/Favorites';
+import { AIAnalysis }    from './pages/AIAnalysis';
+import { AIAssistant }   from './components/AIAssistant';
+import { DownloadsPanel } from './components/DownloadsPanel';
+import { History }        from './pages/History';
+import { Settings }       from './pages/Settings';
+
+const BROWSER_VERSION = '3.0.0';
+
+export default function App() {
+  const electronAPI = window.electronAPI;
+
+  // ── Settings State ───────────────────────────────────────────────
+  const [settings, setSettings] = useState({
+    geminiKey: 'AIzaSyDRUFM-LnQZY87nYNL3VpMJtTGxVNd0yqU',
+    searchEngine: 'google',
+    theme: 'dark',
+    homepage: 'kdg://home',
+    hasPromptedDefault: false,
+    memorySaver: true
+  });
+
+  // ── Tabs ────────────────────────────────────────────────────────
+  const [tabs, setTabs] = useState([
+    {
+      id: 'tab-1',
+      title: 'KDG Browser',
+      url: 'kdg://home',
+      canGoBack: false,
+      canGoForward: false,
+      activeDashboardSection: 'home'
+    }
+  ]);
+  const [activeTabId, setActiveTabId]     = useState('tab-1');
+  const [addressValue, setAddressValue]   = useState('kdg://home');
+  const [isLoading, setIsLoading]         = useState(false);
+
+  // ── UI panels ────────────────────────────────────────────────────
+  const [isAiOpen,       setIsAiOpen]       = useState(false);
+  const [isDownloadsOpen, setIsDownloadsOpen] = useState(false);
+  const [showDefaultBanner, setShowDefaultBanner] = useState(false);
+
+  // ── Data ─────────────────────────────────────────────────────────
+  const [bookmarkedUrls, setBookmarkedUrls] = useState([]);
+  const [downloads,      setDownloads]      = useState([]);
+
+  // Webview refs
+  const webviewRefs = useRef({});
+
+  const activeTab = tabs.find(t => t.id === activeTabId) || tabs[0];
+
+  // ── Initial load ─────────────────────────────────────────────────
+  useEffect(() => {
+    async function loadInitialData() {
+      if (electronAPI) {
+        try {
+          const loadedSettings = await electronAPI.getSettings();
+          if (loadedSettings) {
+            setSettings(prev => ({ ...prev, ...loadedSettings }));
+          }
+
+          const bookmarks = await electronAPI.getBookmarks();
+          if (bookmarks) setBookmarkedUrls(bookmarks.map(b => b.url));
+        } catch (e) {
+          console.error('Failed to load settings:', e);
+        }
+      }
+    }
+    loadInitialData();
+  }, [electronAPI]);
+
+  // ── Theme Apply Effect ───────────────────────────────────────────
+  useEffect(() => {
+    // Apply theme to document body
+    document.body.className = `theme-${settings.theme}`;
+  }, [settings.theme]);
+
+  // ── Default Browser Banner Check ─────────────────────────────────
+  useEffect(() => {
+    async function checkDefaultBrowser() {
+      if (electronAPI?.isDefaultBrowser && settings.hasPromptedDefault === false) {
+        try {
+          const isDefault = await electronAPI.isDefaultBrowser();
+          if (!isDefault) {
+            setShowDefaultBanner(true);
+          }
+        } catch (e) {
+          console.error('Failed to check default browser:', e);
+        }
+      }
+    }
+    // Small delay to allow initial settings load
+    const timer = setTimeout(checkDefaultBrowser, 1500);
+    return () => clearTimeout(timer);
+  }, [electronAPI, settings.hasPromptedDefault]);
+
+  const handleMakeDefault = async () => {
+    if (electronAPI?.setDefaultBrowser) {
+      await electronAPI.setDefaultBrowser();
+      setShowDefaultBanner(false);
+      const updated = { ...settings, hasPromptedDefault: true };
+      await electronAPI.saveSettings(updated);
+      setSettings(updated);
+    }
+  };
+
+  const handleDismissDefault = async () => {
+    setShowDefaultBanner(false);
+    const updated = { ...settings, hasPromptedDefault: true };
+    if (electronAPI?.saveSettings) {
+      await electronAPI.saveSettings(updated);
+    }
+    setSettings(updated);
+  };
+
+  // ── Sync address bar ─────────────────────────────────────────────
+  useEffect(() => {
+    if (activeTab) setAddressValue(activeTab.url);
+  }, [activeTabId, activeTab?.url]);
+
+  // ── Keyboard shortcuts ───────────────────────────────────────────
+  useEffect(() => {
+    const onKey = (e) => {
+      if (e.ctrlKey) {
+        if (e.key === 't') { e.preventDefault(); handleAddTab(); }
+        if (e.key === 'w') { e.preventDefault(); if (tabs.length > 1) handleCloseTab(activeTabId, e); }
+        if (e.key === 'd') { e.preventDefault(); handleToggleBookmark(); }
+        if (e.key === 'j') { e.preventDefault(); setIsDownloadsOpen(v => !v); }
+        if (e.key === ',') { e.preventDefault(); setDashboardSection('settings'); }
+        if (e.key === 'l') { e.preventDefault(); document.querySelector('.address-bar-input')?.focus(); }
+        if (e.key === 'r') { e.preventDefault(); handleRefresh(); }
+        
+        // Ctrl+1..8 — switch tabs
+        const num = parseInt(e.key);
+        if (num >= 1 && num <= 8 && tabs[num - 1]) {
+          e.preventDefault();
+          setActiveTabId(tabs[num - 1].id);
+        }
+        if (e.key === '9') {
+          e.preventDefault();
+          setActiveTabId(tabs[tabs.length - 1].id);
+        }
+      }
+      if (e.key === 'F5') { e.preventDefault(); handleRefresh(); }
+      if (e.key === 'F6') { e.preventDefault(); document.querySelector('.address-bar-input')?.focus(); }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [tabs, activeTabId, settings]);
+
+  // ── Tab management ───────────────────────────────────────────────
+  const handleAddTab = useCallback(() => {
+    const newId = `tab-${Math.random().toString(36).slice(2, 9)}`;
+    const newTab = {
+      id: newId,
+      title: 'Новая вкладка',
+      url: settings.homepage || 'kdg://home',
+      canGoBack: false,
+      canGoForward: false,
+      activeDashboardSection: 'home'
+    };
+    setTabs(prev => [...prev, newTab]);
+    setActiveTabId(newId);
+  }, [settings.homepage]);
+
+  const handleCloseTab = useCallback((id, e) => {
+    e?.stopPropagation();
+    setTabs(prev => {
+      if (prev.length === 1) return prev;
+      const idx = prev.findIndex(t => t.id === id);
+      const next = prev.filter(t => t.id !== id);
+      if (id === activeTabId) {
+        const nextIdx = idx === 0 ? 0 : idx - 1;
+        setActiveTabId(next[nextIdx].id);
+      }
+      delete webviewRefs.current[id];
+      return next;
+    });
+  }, [activeTabId]);
+
+  // ── Navigation ───────────────────────────────────────────────────
+  const handleNavigate = useCallback((url, newTitle) => {
+    let clean = url.trim();
+    let activeSec = 'home';
+    let title = newTitle || clean;
+
+    if (clean.startsWith('kdg://')) {
+      if (clean === 'kdg://settings') {
+        activeSec = 'settings';
+        title = 'Настройки';
+      } else if (clean === 'kdg://home') {
+        activeSec = 'home';
+        title = 'KDG Browser';
+      } else if (clean.startsWith('kdg://video/')) {
+        activeSec = 'home';
+      }
+    } else {
+      const isUrl = /^(https?:\/\/)?([\da-z.-]+)\.([a-z.]{2,6})([/\w .-]*)*\/?$/i;
+      const isIp  = /^(https?:\/\/)?localhost(:\d+)?/i;
+      if (!isUrl.test(clean) && !isIp.test(clean)) {
+        let searchUrl = 'https://www.google.com/search?q=';
+        if (settings.searchEngine === 'yandex') searchUrl = 'https://yandex.ru/search/?text=';
+        else if (settings.searchEngine === 'bing') searchUrl = 'https://www.bing.com/search?q=';
+        else if (settings.searchEngine === 'duckduckgo') searchUrl = 'https://duckduckgo.com/?q=';
+        clean = `${searchUrl}${encodeURIComponent(clean)}`;
+      } else if (!clean.startsWith('http')) {
+        clean = `https://${clean}`;
+      }
+    }
+
+    setTabs(prev => prev.map(t =>
+      t.id === activeTabId
+        ? { 
+            ...t, 
+            url: clean, 
+            title: title, 
+            activeDashboardSection: clean.startsWith('kdg://') ? activeSec : t.activeDashboardSection,
+            activeVideo: clean.startsWith('kdg://') ? t.activeVideo : undefined 
+          }
+        : t
+    ));
+
+    if (!clean.startsWith('kdg://') && electronAPI) {
+      electronAPI.addHistory({ url: clean, title: title }).catch(console.error);
+    }
+  }, [activeTabId, electronAPI, settings.searchEngine]);
+
+  const handleAddressSubmit = (e) => { e.preventDefault(); handleNavigate(addressValue); };
+
+  const handleGoBack    = () => { const wv = webviewRefs.current[activeTabId]; if (wv?.canGoBack())    wv.goBack(); };
+  const handleGoForward = () => { const wv = webviewRefs.current[activeTabId]; if (wv?.canGoForward()) wv.goForward(); };
+  const handleRefresh   = () => {
+    const wv = webviewRefs.current[activeTabId];
+    if (wv) { if (isLoading) wv.stop(); else wv.reload(); }
+    else handleNavigate(activeTab.url, activeTab.title);
+  };
+  const handleGoHome = () => {
+    handleNavigate(settings.homepage || 'kdg://home', 'KDG Browser');
+    setTabs(prev => prev.map(t => t.id === activeTabId ? { ...t, activeDashboardSection: 'home', activeVideo: undefined } : t));
+  };
+
+  // ── Bookmarks ────────────────────────────────────────────────────
+  const handleToggleBookmark = async () => {
+    if (!electronAPI) return;
+    try {
+      const bookmarks = await electronAPI.toggleBookmark({ url: activeTab.url, title: activeTab.title || activeTab.url });
+      if (bookmarks) setBookmarkedUrls(bookmarks.map(b => b.url));
+    } catch (err) { console.error(err); }
+  };
+
+  // ── Settings Save ────────────────────────────────────────────────
+  const handleSaveSettings = async (newSettings) => {
+    if (!electronAPI) return;
+    try {
+      await electronAPI.saveSettings(newSettings);
+      setSettings(newSettings);
+    } catch (e) { console.error(e); }
+  };
+
+  // ── Video select ─────────────────────────────────────────────────
+  const handleSelectVideo = (video, autoOpenAI = false) => {
+    setTabs(prev => prev.map(t =>
+      t.id === activeTabId
+        ? { ...t, url: `kdg://video/${video.id}`, title: `KDG: ${video.title}`, activeVideo: video }
+        : t
+    ));
+    if (autoOpenAI) setIsAiOpen(true);
+  };
+
+  const setDashboardSection = (sec) => {
+    setTabs(prev => prev.map(t =>
+      t.id === activeTabId
+        ? { 
+            ...t, 
+            activeDashboardSection: sec, 
+            url: sec === 'settings' ? 'kdg://settings' : 'kdg://home', 
+            activeVideo: undefined,
+            title: sec === 'settings' ? 'Настройки' : 'KDG Browser'
+          }
+        : t
+    ));
+  };
+
+  // ── Page Context Extraction for Cometa ────────────────────────────
+  const getActivePageContext = async () => {
+    const activeWv = webviewRefs.current[activeTabId];
+    if (!activeWv || activeTab.url.startsWith('kdg://')) {
+      return null;
+    }
+    try {
+      const url = activeTab.url;
+      const title = activeTab.title || await activeWv.executeJavaScript('document.title');
+      const content = await activeWv.executeJavaScript('document.body.innerText');
+      const selection = await activeWv.executeJavaScript('window.getSelection().toString()');
+      return { url, title, content, selection };
+    } catch (err) {
+      console.error('Error getting webview page context:', err);
+      return {
+        url: activeTab.url,
+        title: activeTab.title,
+        content: '',
+        selection: ''
+      };
+    }
+  };
+
+  // ── Webview listeners ────────────────────────────────────────────
+  const handleWebviewRef = useCallback((id, el) => {
+    if (!el || webviewRefs.current[id]) return;
+    webviewRefs.current[id] = el;
+
+    el.addEventListener('did-start-loading',  () => { if (id === activeTabId) setIsLoading(true);  });
+    el.addEventListener('did-stop-loading',   () => { if (id === activeTabId) setIsLoading(false); });
+    el.addEventListener('did-finish-load',    () => { if (id === activeTabId) setIsLoading(false); });
+
+    el.addEventListener('did-navigate', (e) => {
+      setTabs(prev => prev.map(t =>
+        t.id === id ? { ...t, url: e.url, canGoBack: el.canGoBack(), canGoForward: el.canGoForward() } : t
+      ));
+      if (electronAPI) electronAPI.addHistory({ url: e.url, title: el.getTitle() || e.url }).catch(console.error);
+    });
+
+    el.addEventListener('did-navigate-in-page', (e) => {
+      setTabs(prev => prev.map(t =>
+        t.id === id ? { ...t, url: e.url, canGoBack: el.canGoBack(), canGoForward: el.canGoForward() } : t
+      ));
+    });
+
+    el.addEventListener('page-title-updated', (e) => {
+      setTabs(prev => prev.map(t => t.id === id ? { ...t, title: e.title } : t));
+    });
+
+    el.addEventListener('page-favicon-updated', (e) => {
+      if (e.favicons?.[0]) {
+        setTabs(prev => prev.map(t => t.id === id ? { ...t, favicon: e.favicons[0] } : t));
+      }
+    });
+
+    // Handle targeting of clicks trying to open new windows
+    el.addEventListener('new-window', (e) => {
+      e.preventDefault();
+      const newId = `tab-${Math.random().toString(36).slice(2, 9)}`;
+      const newTab = {
+        id: newId,
+        title: 'Загрузка...',
+        url: e.url,
+        canGoBack: false,
+        canGoForward: false,
+        activeDashboardSection: 'home'
+      };
+      setTabs(prev => [...prev, newTab]);
+      setActiveTabId(newId);
+    });
+
+    // Download support
+    el.addEventListener('will-download', () => {
+      setIsDownloadsOpen(true);
+    });
+  }, [activeTabId, electronAPI]);
+
+  const isBookmarked = bookmarkedUrls.includes(activeTab?.url);
+
+  return (
+    <div className="app-container">
+      {/* Header */}
+      <Header
+        tabs={tabs}
+        activeTabId={activeTabId}
+        setActiveTabId={setActiveTabId}
+        handleAddTab={handleAddTab}
+        handleCloseTab={handleCloseTab}
+        addressValue={addressValue}
+        setAddressValue={setAddressValue}
+        handleAddressSubmit={handleAddressSubmit}
+        handleGoBack={handleGoBack}
+        handleGoForward={handleGoForward}
+        handleRefresh={handleRefresh}
+        handleGoHome={handleGoHome}
+        activeTab={activeTab}
+        isLoading={isLoading}
+        isAiOpen={isAiOpen}
+        setIsAiOpen={setIsAiOpen}
+        setIsSettingsOpen={() => setDashboardSection('settings')}
+        isBookmarked={isBookmarked}
+        handleToggleBookmark={handleToggleBookmark}
+        isDownloadsOpen={isDownloadsOpen}
+        setIsDownloadsOpen={setIsDownloadsOpen}
+        downloadCount={downloads.filter(d => d.status === 'downloading').length}
+      />
+
+      {/* Default Browser Prompt Banner */}
+      {showDefaultBanner && (
+        <div className="default-browser-banner">
+          <div className="default-banner-content">
+            <span className="banner-icon">🎮</span>
+            <span>KDG Browser не является вашим браузером по умолчанию. Сделайте его основным для прохождения игр!</span>
+          </div>
+          <div className="default-banner-actions">
+            <button className="banner-btn banner-btn-primary" onClick={handleMakeDefault}>
+              Сделать по умолчанию
+            </button>
+            <button className="banner-btn banner-btn-secondary" onClick={handleDismissDefault}>
+              Не сейчас
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Main area */}
+      <div className="main-layout">
+        {activeTab.url.startsWith('kdg://') ? (
+          <div style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
+            <Navigation
+              activeSection={activeTab.activeDashboardSection}
+              setActiveSection={setDashboardSection}
+            />
+            <div className="content-viewport">
+              <>
+                  {activeTab.activeDashboardSection === 'home' && (
+                    <Home onNavigateUrl={(url) => handleNavigate(url)} />
+                  )}
+                  {activeTab.activeDashboardSection === 'search' && (
+                    <Search onNavigateUrl={(url) => handleNavigate(url)} />
+                  )}
+                  {activeTab.activeDashboardSection === 'favorites' && (
+                    <Favorites onNavigateUrl={(url) => handleNavigate(url)} />
+                  )}
+                  {activeTab.activeDashboardSection === 'history' && (
+                    <History onNavigateUrl={(url) => handleNavigate(url)} />
+                  )}
+                  {activeTab.activeDashboardSection === 'ai' && (
+                    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', padding: '24px' }}>
+                      <div className="section-header">
+                        <BrainCircuit size={16} style={{ color: 'var(--accent)' }} />
+                        ИИ Лаборатория — Общий чат
+                      </div>
+                      <div className="cyber-panel" style={{ flex: 1, overflow: 'hidden', padding: 0 }}>
+                        <AIAssistant isOpen={true} onClose={() => {}} />
+                      </div>
+                    </div>
+                  )}
+                  {activeTab.activeDashboardSection === 'settings' && (
+                    <Settings
+                      settings={settings}
+                      onSaveSettings={handleSaveSettings}
+                      onRefreshBookmarks={async () => {
+                        const bookmarks = await electronAPI.getBookmarks();
+                        if (bookmarks) setBookmarkedUrls(bookmarks.map(b => b.url));
+                      }}
+                    />
+                  )}
+              </>
+            </div>
+          </div>
+        ) : (
+          // Webview for real websites
+          <div className="webview-container">
+            {tabs.map(tab => (
+              <webview
+                key={tab.id}
+                ref={(el) => handleWebviewRef(tab.id, el)}
+                src={tab.url}
+                partition="persist:kdg"
+                allowpopups="true"
+                style={{
+                  width: '100%', height: '100%',
+                  display: tab.id === activeTabId ? 'flex' : 'none'
+                }}
+              />
+            ))}
+          </div>
+        )}
+
+        {/* AI Drawer */}
+        <AIAssistant
+          isOpen={isAiOpen}
+          onClose={() => setIsAiOpen(false)}
+          currentVideo={activeTab.activeVideo}
+          activeTabUrl={activeTab.url}
+          getActivePageContext={getActivePageContext}
+        />
+
+        {/* Downloads Panel */}
+        {isDownloadsOpen && (
+          <DownloadsPanel
+            downloads={downloads}
+            onClose={() => setIsDownloadsOpen(false)}
+            onClearAll={() => setDownloads([])}
+          />
+        )}
+      </div>
+    </div>
+  );
+}
