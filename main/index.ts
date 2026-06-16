@@ -101,8 +101,9 @@ if (!gotTheLock) {
   registerIpcHandlers();
   createWindow();
 
-  // Handle Downloads
-  session.defaultSession.on('will-download', (event, item, webContents) => {
+  // Handle Downloads for the custom webview partition
+  const customSession = session.fromPartition('persist:kdg');
+  customSession.on('will-download', (event, item, webContents) => {
     // Generate a unique ID for the download
     const id = Math.random().toString(36).substring(2, 10);
     const fileName = item.getFilename();
