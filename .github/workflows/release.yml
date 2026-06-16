@@ -1,0 +1,29 @@
+name: Release KDG Browser
+
+on:
+  push:
+    tags:
+      - 'v*' # Триггер при создании тега, начинающегося с "v" (например, v3.2.0)
+  workflow_dispatch: # Кнопка для ручного запуска
+
+jobs:
+  build:
+    runs-on: windows-latest
+    
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20' # Требуемая версия Node
+          cache: 'npm'
+
+      - name: Install Dependencies
+        run: npm ci
+
+      - name: Build and Publish
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }} # Токен для создания релиза
+        run: npm run publish:win
