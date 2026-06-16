@@ -20,7 +20,7 @@ export function Navigation({ activeSection, setActiveSection }) {
             key={id}
             className={`sidebar-btn ${active ? 'active' : ''}`}
             onClick={() => setActiveSection(id)}
-            title={label}
+            data-tooltip={label}
           >
             <Icon />
             <span>{label}</span>

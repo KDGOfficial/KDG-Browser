@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { Search } from 'lucide-react';
 
 const SEARCH_ENGINES = [
@@ -75,13 +75,25 @@ const QUICK_LINKS = [
 export function Home({ onNavigateUrl }) {
   const [engine,   setEngine]  = useState('google');
   const [query,    setQuery]   = useState('');
-  const [greeting, _]          = useState(() => {
+  const [greeting]             = useState(() => {
     const h = new Date().getHours();
     if (h < 6)  return 'Доброй ночи';
     if (h < 12) return 'Доброе утро';
     if (h < 18) return 'Добрый день';
     return 'Добрый вечер';
   });
+  const [time, setTime] = useState(() => {
+    const now = new Date();
+    return now.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
+  });
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      const now = new Date();
+      setTime(now.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' }));
+    }, 1000);
+    return () => clearInterval(interval);
+  }, []);
 
   const inputRef = useRef(null);
   const active = SEARCH_ENGINES.find(e => e.id === engine);
@@ -104,6 +116,9 @@ export function Home({ onNavigateUrl }) {
 
   return (
     <div className="home-page">
+      {/* Mesh gradient background */}
+      <div className="home-mesh-bg" />
+
       {/* Background glow orbs */}
       <div className="home-orb home-orb-1" />
       <div className="home-orb home-orb-2" />
@@ -113,6 +128,9 @@ export function Home({ onNavigateUrl }) {
 
         {/* Greeting */}
         <div className="home-greeting">{greeting} 👋</div>
+
+        {/* Clock */}
+        <div className="home-clock">{time}</div>
 
         {/* Logo */}
         <div className="home-logo">
