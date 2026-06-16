@@ -1,6 +1,6 @@
 {
   "name": "kdg-browser",
-  "version": "3.1.0",
+  "version": "3.1.1",
   "description": "KDG Browser - Chromium-based browser with AI features for KDG Channel",
   "author": "KDG Developer",
   "main": "dist-electron/index.cjs",
@@ -52,7 +52,8 @@
       {
         "provider": "github",
         "owner": "KDGOfficial",
-        "repo": "KDG-Browser"
+        "repo": "KDG-Browser",
+        "releaseType": "release"
       }
     ]
   }
