@@ -20,6 +20,8 @@ export function Settings({ settings, onSaveSettings, onRefreshBookmarks }) {
   const [isDefault, setIsDefault] = useState(false);
   const [importStatus, setImportStatus] = useState({ type: '', message: '', count: 0 });
   const [saveStatus, setSaveStatus] = useState(false);
+  const [appVersion, setAppVersion] = useState('3.1.0');
+  const [updateStatus, setUpdateStatus] = useState({ status: 'idle', message: '', progress: 0 });
 
   useEffect(() => {
     if (settings) {
@@ -35,7 +37,53 @@ export function Settings({ settings, onSaveSettings, onRefreshBookmarks }) {
       }
     }
     checkDefaultStatus();
+
+    async function initUpdates() {
+      if (electronAPI?.getVersion) {
+        const version = await electronAPI.getVersion();
+        setAppVersion(version);
+      }
+      
+      if (electronAPI?.onUpdateStatus) {
+        electronAPI.onUpdateStatus((event, data) => {
+          if (data.status === 'checking') {
+            setUpdateStatus({ status: 'checking', message: 'Проверка обновлений...', progress: 0 });
+          } else if (data.status === 'update-available') {
+            setUpdateStatus({ status: 'available', message: `Доступна новая версия: ${data.info?.version || ''}`, progress: 0 });
+          } else if (data.status === 'update-not-available') {
+            setUpdateStatus({ status: 'idle', message: 'У вас установлена последняя версия.', progress: 0 });
+          } else if (data.status === 'download-progress') {
+            setUpdateStatus({ status: 'downloading', message: 'Скачивание обновления...', progress: data.progress });
+          } else if (data.status === 'update-downloaded') {
+            setUpdateStatus({ status: 'ready', message: 'Обновление готово к установке.', progress: 100 });
+          } else if (data.status === 'error') {
+            setUpdateStatus({ status: 'error', message: `Ошибка обновления: ${data.error}`, progress: 0 });
+          }
+        });
+      }
+    }
+    initUpdates();
   }, [electronAPI]);
+
+  const handleCheckUpdates = () => {
+    setUpdateStatus({ status: 'checking', message: 'Проверка обновлений...', progress: 0 });
+    if (electronAPI?.checkForUpdates) {
+      electronAPI.checkForUpdates();
+    }
+  };
+
+  const handleDownloadUpdate = () => {
+    setUpdateStatus({ status: 'downloading', message: 'Начинаем загрузку...', progress: 0 });
+    if (electronAPI?.downloadUpdate) {
+      electronAPI.downloadUpdate();
+    }
+  };
+
+  const handleInstallUpdate = () => {
+    if (electronAPI?.quitAndInstallUpdate) {
+      electronAPI.quitAndInstallUpdate();
+    }
+  };
 
   const handleChange = (key, value) => {
     const updated = { ...localSettings, [key]: value };
@@ -349,17 +397,58 @@ export function Settings({ settings, onSaveSettings, onRefreshBookmarks }) {
               <div className="about-logo">
                 <Sparkles size={48} className="logo-sparkle-glow" />
               </div>
-              <h1 className="about-title">KDG Browser v3.0.0</h1>
+              <h1 className="about-title">KDG Browser v{appVersion}</h1>
               <p className="about-tagline">Полнофункциональный ИИ-браузер для «Канала Доброго Геймера»</p>
               
               <div className="about-details">
                 <div className="details-row">
                   <span>Версия сборки</span>
-                  <strong>3.0.0 (Chromium Core)</strong>
+                  <strong>{appVersion} (Chromium Core)</strong>
                 </div>
-                <div className="details-row">
-                  <span>Статус обновлений</span>
-                  <span style={{ color: 'var(--accent-green)', fontWeight: 600 }}>Версия актуальна</span>
+                <div className="details-row" style={{ alignItems: 'flex-start' }}>
+                  <span>Обновления</span>
+                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '8px' }}>
+                    {updateStatus.status === 'idle' || updateStatus.status === 'error' ? (
+                      <button className="gamer-btn" style={{ padding: '6px 12px', fontSize: '0.85rem' }} onClick={handleCheckUpdates}>
+                        Проверить обновления
+                      </button>
+                    ) : null}
+                    
+                    {updateStatus.status === 'checking' && (
+                      <span style={{ display: 'flex', alignItems: 'center', gap: '6px', color: 'var(--text-muted)' }}>
+                        <RefreshCw size={14} className="spin" /> Проверка...
+                      </span>
+                    )}
+
+                    {updateStatus.status === 'available' && (
+                      <button className="gamer-btn gamer-btn-orange" style={{ padding: '6px 12px', fontSize: '0.85rem' }} onClick={handleDownloadUpdate}>
+                        Скачать обновление
+                      </button>
+                    )}
+
+                    {updateStatus.status === 'downloading' && (
+                      <div style={{ width: '150px', textAlign: 'right' }}>
+                        <div style={{ fontSize: '0.8rem', marginBottom: '4px', color: 'var(--accent-orange)' }}>
+                          Загрузка: {Math.round(updateStatus.progress || 0)}%
+                        </div>
+                        <div style={{ width: '100%', height: '4px', background: 'var(--surface-3)', borderRadius: '2px', overflow: 'hidden' }}>
+                          <div style={{ width: `${updateStatus.progress || 0}%`, height: '100%', background: 'var(--accent-orange)' }}></div>
+                        </div>
+                      </div>
+                    )}
+
+                    {updateStatus.status === 'ready' && (
+                      <button className="gamer-btn gamer-btn-orange" style={{ padding: '6px 12px', fontSize: '0.85rem', background: 'var(--accent-green)', borderColor: 'var(--accent-green)' }} onClick={handleInstallUpdate}>
+                        Установить и перезапустить
+                      </button>
+                    )}
+
+                    {updateStatus.message && updateStatus.status !== 'checking' && updateStatus.status !== 'downloading' && (
+                      <div style={{ fontSize: '0.8rem', color: updateStatus.status === 'error' ? '#ff4a4a' : 'var(--text-muted)', marginTop: '4px', maxWidth: '200px', textAlign: 'right' }}>
+                        {updateStatus.message}
+                      </div>
+                    )}
+                  </div>
                 </div>
                 <div className="details-row">
                   <span>Разработчик</span>

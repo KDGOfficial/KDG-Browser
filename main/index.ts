@@ -1,6 +1,7 @@
-import { app, BrowserWindow, Menu } from 'electron';
+import { app, BrowserWindow, Menu, ipcMain } from 'electron';
 import path from 'path';
 import { registerIpcHandlers } from './ipc-handlers';
+import { autoUpdater } from 'electron-updater';
 
 let mainWindow: BrowserWindow | null = null;
 
@@ -53,6 +54,60 @@ app.on('web-contents-created', (event, contents) => {
 app.whenReady().then(() => {
   registerIpcHandlers();
   createWindow();
+
+  // Setup Auto Updater
+  autoUpdater.autoDownload = false;
+
+  ipcMain.handle('updater:getVersion', () => {
+    return app.getVersion();
+  });
+
+  ipcMain.on('updater:check', () => {
+    if (app.isPackaged) {
+      autoUpdater.checkForUpdates();
+    } else {
+      // Mock for development
+      setTimeout(() => {
+        mainWindow?.webContents.send('updater:status', { status: 'update-not-available' });
+      }, 1500);
+    }
+  });
+
+  ipcMain.on('updater:download', () => {
+    if (app.isPackaged) {
+      autoUpdater.downloadUpdate();
+    }
+  });
+
+  ipcMain.on('updater:quitAndInstall', () => {
+    if (app.isPackaged) {
+      autoUpdater.quitAndInstall();
+    }
+  });
+
+  autoUpdater.on('checking-for-update', () => {
+    mainWindow?.webContents.send('updater:status', { status: 'checking' });
+  });
+
+  autoUpdater.on('update-available', (info) => {
+    mainWindow?.webContents.send('updater:status', { status: 'update-available', info });
+  });
+
+  autoUpdater.on('update-not-available', (info) => {
+    mainWindow?.webContents.send('updater:status', { status: 'update-not-available', info });
+  });
+
+  autoUpdater.on('error', (err) => {
+    mainWindow?.webContents.send('updater:status', { status: 'error', error: err.message });
+  });
+
+  autoUpdater.on('download-progress', (progressObj) => {
+    mainWindow?.webContents.send('updater:status', { status: 'download-progress', progress: progressObj.percent });
+  });
+
+  autoUpdater.on('update-downloaded', (info) => {
+    mainWindow?.webContents.send('updater:status', { status: 'update-downloaded' });
+  });
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) {

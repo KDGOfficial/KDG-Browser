@@ -1,6 +1,6 @@
 {
   "name": "kdg-browser",
-  "version": "3.0.0",
+  "version": "3.1.0",
   "description": "KDG Browser - Chromium-based browser with AI features for KDG Channel",
   "author": "KDG Developer",
   "main": "dist-electron/index.cjs",
@@ -12,6 +12,7 @@
   },
   "dependencies": {
     "@google/generative-ai": "^0.21.0",
+    "electron-updater": "^6.8.9",
     "lucide-react": "^0.475.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1"
@@ -39,7 +40,19 @@
       "package.json"
     ],
     "win": {
-      "target": "portable"
-    }
+      "target": "nsis"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "perMachine": false
+    },
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "KDGOfficial",
+        "repo": "KDG-Browser"
+      }
+    ]
   }
 }

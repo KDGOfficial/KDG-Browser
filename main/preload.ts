@@ -27,5 +27,15 @@ contextBridge.exposeInMainWorld('electronAPI', {
   importBookmarksDialog: () => ipcRenderer.invoke('bookmarks:importDialog'),
 
   // Dialog API
-  openImageDialog: () => ipcRenderer.invoke('dialog:openImage')
+  openImageDialog: () => ipcRenderer.invoke('dialog:openImage'),
+
+  // Auto Updater API
+  getVersion: () => ipcRenderer.invoke('updater:getVersion'),
+  checkForUpdates: () => ipcRenderer.send('updater:check'),
+  downloadUpdate: () => ipcRenderer.send('updater:download'),
+  quitAndInstallUpdate: () => ipcRenderer.send('updater:quitAndInstall'),
+  onUpdateStatus: (callback: (event: any, data: any) => void) => {
+    ipcRenderer.removeAllListeners('updater:status');
+    ipcRenderer.on('updater:status', callback);
+  }
 });
