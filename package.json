@@ -1,6 +1,6 @@
 {
   "name": "kdg-browser",
-  "version": "3.2.1",
+  "version": "3.2.2",
   "description": "KDG Browser - Chromium-based browser with AI features for KDG Channel",
   "author": "KDG Developer",
   "main": "dist-electron/index.cjs",
@@ -34,6 +34,14 @@
   "build": {
     "appId": "com.kdg.browser",
     "productName": "KDG Browser",
+    "protocols": [
+      {
+        "name": "KDG Protocol",
+        "schemes": [
+          "kdg"
+        ]
+      }
+    ],
     "directories": {
       "output": "dist-package"
     },

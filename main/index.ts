@@ -77,6 +77,15 @@ app.on('web-contents-created', (event, contents) => {
 });
 
 app.whenReady().then(async () => {
+  // Register custom protocol 'kdg://'
+  if (process.defaultApp) {
+    if (process.argv.length >= 2) {
+      app.setAsDefaultProtocolClient('kdg', process.execPath, [path.resolve(process.argv[1])]);
+    }
+  } else {
+    app.setAsDefaultProtocolClient('kdg');
+  }
+
   registerIpcHandlers();
   createWindow();
 
