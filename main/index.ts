@@ -76,7 +76,19 @@ app.on('web-contents-created', (event, contents) => {
   });
 });
 
-app.whenReady().then(async () => {
+const gotTheLock = app.requestSingleInstanceLock();
+
+if (!gotTheLock) {
+  app.quit();
+} else {
+  app.on('second-instance', (event, commandLine, workingDirectory) => {
+    if (mainWindow) {
+      if (mainWindow.isMinimized()) mainWindow.restore();
+      mainWindow.focus();
+    }
+  });
+
+  app.whenReady().then(async () => {
   // Register custom protocol 'kdg://'
   if (process.defaultApp) {
     if (process.argv.length >= 2) {
@@ -158,6 +170,8 @@ app.whenReady().then(async () => {
     }
   });
 });
+
+} // Close the else block for single instance lock
 
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') {
