@@ -17,7 +17,13 @@ async function compileMain() {
     platform: 'node',
     format: 'cjs',
     outdir: 'dist-electron',
-    external: ['electron'],
+    external: [
+      'electron', 
+      '@cliqz/adblocker-electron', 
+      'cross-fetch', 
+      'electron-updater',
+      '@google/generative-ai'
+    ],
     minify: true,
     outExtension: { '.js': '.cjs' }
   });
