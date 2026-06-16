@@ -310,6 +310,30 @@ export default function App() {
     }
   };
 
+  // ── Memory Saver (Sleeping Tabs) ─────────────────────────────────
+  useEffect(() => {
+    setTabs(prev => prev.map(t => 
+      t.id === activeTabId ? { ...t, lastActive: Date.now(), isSleeping: false } : t
+    ));
+  }, [activeTabId]);
+
+  useEffect(() => {
+    if (!settings.memorySaver) return;
+    const interval = setInterval(() => {
+      const now = Date.now();
+      setTabs(prev => prev.map(t => {
+        if (t.id === activeTabId || t.isSleeping || !t.lastActive) return t;
+        // Усыпляем вкладку после 5 минут неактивности
+        if (now - t.lastActive > 5 * 60 * 1000) {
+          console.log(`Tab ${t.id} went to sleep to save memory`);
+          return { ...t, isSleeping: true };
+        }
+        return t;
+      }));
+    }, 60000); // Check every minute
+    return () => clearInterval(interval);
+  }, [settings.memorySaver, activeTabId]);
+
   // ── Webview listeners ────────────────────────────────────────────
   const handleWebviewRef = useCallback((id, el) => {
     if (!el || webviewRefs.current[id]) return;
@@ -461,19 +485,24 @@ export default function App() {
         ) : (
           // Webview for real websites
           <div className="webview-container">
-            {tabs.map(tab => (
-              <webview
-                key={tab.id}
-                ref={(el) => handleWebviewRef(tab.id, el)}
-                src={tab.url}
-                partition="persist:kdg"
-                allowpopups="true"
-                style={{
-                  width: '100%', height: '100%',
-                  display: tab.id === activeTabId ? 'flex' : 'none'
-                }}
-              />
-            ))}
+            {tabs.map(tab => {
+              if (tab.isSleeping && tab.id !== activeTabId) {
+                return <div key={tab.id} style={{ display: 'none' }} />;
+              }
+              return (
+                <webview
+                  key={tab.id}
+                  ref={(el) => handleWebviewRef(tab.id, el)}
+                  src={tab.url}
+                  partition="persist:kdg"
+                  allowpopups="true"
+                  style={{
+                    width: '100%', height: '100%',
+                    display: tab.id === activeTabId ? 'flex' : 'none'
+                  }}
+                />
+              );
+            })}
           </div>
         )}
 

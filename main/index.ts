@@ -1,7 +1,32 @@
-import { app, BrowserWindow, Menu, ipcMain } from 'electron';
+import { app, BrowserWindow, Menu, ipcMain, session } from 'electron';
 import path from 'path';
+import os from 'os';
 import { registerIpcHandlers } from './ipc-handlers';
 import { autoUpdater } from 'electron-updater';
+import { ElectronBlocker } from '@cliqz/adblocker-electron';
+import fetch from 'cross-fetch';
+
+// --- System Analysis & Optimizations ---
+const totalRAM = os.totalmem() / (1024 * 1024 * 1024); // in GB
+const cpuCores = os.cpus().length;
+
+// Smart Hardware acceleration
+app.commandLine.appendSwitch('enable-zero-copy');
+app.commandLine.appendSwitch('enable-gpu-rasterization');
+app.commandLine.appendSwitch('ignore-gpu-blocklist');
+app.commandLine.appendSwitch('enable-features', 'CanvasOopRasterization');
+
+// Adaptive performance profiling based on user's system
+if (totalRAM <= 4 || cpuCores <= 2) {
+  // Low-end system: limit renderer processes
+  app.commandLine.appendSwitch('renderer-process-limit', '3');
+  app.commandLine.appendSwitch('disable-smooth-scrolling');
+} else if (totalRAM <= 8) {
+  // Mid-range system: moderate limits
+  app.commandLine.appendSwitch('renderer-process-limit', '8');
+} else {
+  // High-end system: No limits, let Chromium fly!
+}
 
 let mainWindow: BrowserWindow | null = null;
 
@@ -51,9 +76,18 @@ app.on('web-contents-created', (event, contents) => {
   });
 });
 
-app.whenReady().then(() => {
+app.whenReady().then(async () => {
   registerIpcHandlers();
   createWindow();
+
+  // Initialize AdBlocker
+  try {
+    const blocker = await ElectronBlocker.fromPrebuiltAdsAndTracking(fetch);
+    blocker.enableBlockingInSession(session.defaultSession);
+    console.log('AdBlocker loaded successfully!');
+  } catch (err) {
+    console.error('Failed to load AdBlocker:', err);
+  }
 
   // Setup Auto Updater
   autoUpdater.autoDownload = false;
