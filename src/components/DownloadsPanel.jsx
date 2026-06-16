@@ -63,30 +63,50 @@ export function DownloadsPanel({ downloads = [], onClose, onClearAll }) {
             </div>
           </div>
         ) : (
-          downloads.map((dl) => (
-            <div key={dl.id} className="download-item">
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                {getStatusIcon(dl.status)}
-                <span className="download-item-name">{dl.filename}</span>
-              </div>
-              {dl.status === 'downloading' && (
-                <div className="download-progress">
-                  <div
-                    className="download-progress-fill"
-                    style={{ width: `${dl.progress || 0}%` }}
-                  />
+          downloads.map((dl) => {
+            const status = dl.state || dl.status;
+            const progress = dl.totalBytes ? Math.round((dl.receivedBytes / dl.totalBytes) * 100) : 0;
+            const filename = dl.fileName || dl.filename;
+            const isDone = status === 'completed';
+            const isError = status === 'interrupted' || status === 'cancelled' || status === 'error';
+
+            return (
+              <div key={dl.id} className="download-item" style={{ animation: 'fade-in 0.3s cubic-bezier(0.16, 1, 0.3, 1)' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, justifyContent: 'space-between' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, overflow: 'hidden' }}>
+                    {getStatusIcon(status)}
+                    <span className="download-item-name">{filename}</span>
+                  </div>
+                  {isDone && dl.savePath && window.electronAPI?.openDownloadedFile && (
+                    <button 
+                      className="nav-btn" 
+                      onClick={() => window.electronAPI.openDownloadedFile(dl.savePath)}
+                      title="Показать в папке"
+                      style={{ padding: '4px 6px' }}
+                    >
+                      <FolderOpen size={14} style={{ color: 'var(--text-secondary)' }} />
+                    </button>
+                  )}
                 </div>
-              )}
-              <div className="download-item-info">
-                <span>
-                  {dl.status === 'completed' ? 'Завершено' :
-                   dl.status === 'error'     ? 'Ошибка'    :
-                   `${dl.progress || 0}% · ${formatSpeed(dl.speed)}`}
-                </span>
-                <span>{formatSize(dl.totalBytes)}</span>
+                {status === 'downloading' && (
+                  <div className="download-progress">
+                    <div
+                      className="download-progress-fill"
+                      style={{ width: `${progress}%` }}
+                    />
+                  </div>
+                )}
+                <div className="download-item-info">
+                  <span>
+                    {isDone ? 'Завершено' :
+                     isError ? 'Ошибка загрузки' :
+                     `${progress}% · В процессе`}
+                  </span>
+                  <span>{formatSize(dl.receivedBytes || 0)} / {formatSize(dl.totalBytes || 0)}</span>
+                </div>
               </div>
-            </div>
-          ))
+            );
+          })
         )}
       </div>
     </div>

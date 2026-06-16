@@ -37,5 +37,14 @@ contextBridge.exposeInMainWorld('electronAPI', {
   onUpdateStatus: (callback: (event: any, data: any) => void) => {
     ipcRenderer.removeAllListeners('updater:status');
     ipcRenderer.on('updater:status', callback);
-  }
+  },
+
+  // Downloads API
+  onDownloadUpdate: (callback: (event: any, data: any) => void) => {
+    // We do not remove all listeners here because multiple components might want to listen,
+    // but in our app we only bind it once in App.jsx.
+    ipcRenderer.removeAllListeners('download-update');
+    ipcRenderer.on('download-update', callback);
+  },
+  openDownloadedFile: (filePath: string) => ipcRenderer.invoke('download:openFolder', filePath)
 });

@@ -101,6 +101,56 @@ if (!gotTheLock) {
   registerIpcHandlers();
   createWindow();
 
+  // Handle Downloads
+  session.defaultSession.on('will-download', (event, item, webContents) => {
+    // Generate a unique ID for the download
+    const id = Math.random().toString(36).substring(2, 10);
+    const fileName = item.getFilename();
+    const startTime = Date.now();
+
+    // Send initial download state
+    if (mainWindow) {
+      mainWindow.webContents.send('download-update', {
+        id,
+        fileName,
+        state: 'downloading',
+        receivedBytes: 0,
+        totalBytes: item.getTotalBytes(),
+        savePath: item.getSavePath()
+      });
+    }
+
+    item.on('updated', (event, state) => {
+      if (state === 'interrupted') {
+        if (mainWindow) mainWindow.webContents.send('download-update', { id, fileName, state: 'interrupted' });
+      } else if (state === 'progressing') {
+        if (mainWindow) {
+          mainWindow.webContents.send('download-update', {
+            id,
+            fileName,
+            state: 'downloading',
+            receivedBytes: item.getReceivedBytes(),
+            totalBytes: item.getTotalBytes(),
+            savePath: item.getSavePath()
+          });
+        }
+      }
+    });
+
+    item.once('done', (event, state) => {
+      if (mainWindow) {
+        mainWindow.webContents.send('download-update', {
+          id,
+          fileName,
+          state: state === 'completed' ? 'completed' : 'cancelled',
+          receivedBytes: item.getReceivedBytes(),
+          totalBytes: item.getTotalBytes(),
+          savePath: item.getSavePath()
+        });
+      }
+    });
+  });
+
   // Initialize AdBlocker
   try {
     const blocker = await ElectronBlocker.fromPrebuiltAdsAndTracking(fetch);

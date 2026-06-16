@@ -345,4 +345,13 @@ export function registerIpcHandlers() {
       throw new Error(err.message || 'Error occurred while contacting Google Gemini.');
     }
   });
+
+  // --- Downloads Handler ---
+  ipcMain.handle('download:openFolder', (_, filePath: string) => {
+    if (fs.existsSync(filePath)) {
+      shell.showItemInFolder(filePath);
+      return true;
+    }
+    return false;
+  });
 }

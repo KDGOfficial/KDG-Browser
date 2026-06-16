@@ -73,6 +73,23 @@ export default function App() {
       }
     }
     loadInitialData();
+
+    // Setup Downloads Listener
+    if (electronAPI?.onDownloadUpdate) {
+      electronAPI.onDownloadUpdate((event, data) => {
+        setDownloads(prev => {
+          const exists = prev.findIndex(d => d.id === data.id);
+          if (exists >= 0) {
+            const copy = [...prev];
+            copy[exists] = { ...copy[exists], ...data };
+            return copy;
+          }
+          // If it's a new download, automatically open the panel
+          setIsDownloadsOpen(true);
+          return [{ ...data }, ...prev];
+        });
+      });
+    }
   }, [electronAPI]);
 
   // ── Theme Apply Effect ───────────────────────────────────────────
