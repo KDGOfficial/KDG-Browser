@@ -305,7 +305,7 @@ if (!gotTheLock) {
       // Mock for development
       setTimeout(() => {
         mainWindow?.webContents.send('updater:status', { status: 'update-not-available' });
-      }, 1500);
+      }, 200);
     }
   });
 

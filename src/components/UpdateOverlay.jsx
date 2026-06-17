@@ -16,8 +16,8 @@ export function UpdateOverlay({ electronAPI, onFinished }) {
         setTimeout(() => {
           setVisible(false);
           setTimeout(onFinished, 500);
-        }, 1500);
-      }, 2000);
+        }, 400);
+      }, 500);
       return;
     }
 
@@ -35,7 +35,7 @@ export function UpdateOverlay({ electronAPI, onFinished }) {
         setTimeout(() => {
           setVisible(false);
           setTimeout(onFinished, 500);
-        }, 1800);
+        }, 400);
       } else if (currentStatus === 'download-progress') {
         setStatus('downloading');
         setProgress(Math.round(data.progress || 0));
