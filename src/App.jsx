@@ -10,8 +10,9 @@ import { AIAssistant }   from './components/AIAssistant';
 import { DownloadsPanel } from './components/DownloadsPanel';
 import { History }        from './pages/History';
 import { Settings }       from './pages/Settings';
+import { UpdateOverlay }  from './components/UpdateOverlay';
 
-const BROWSER_VERSION = '3.0.0';
+const BROWSER_VERSION = '3.3.0';
 
 export default function App() {
   const electronAPI = window.electronAPI;
@@ -45,6 +46,7 @@ export default function App() {
   const [isAiOpen,       setIsAiOpen]       = useState(false);
   const [isDownloadsOpen, setIsDownloadsOpen] = useState(false);
   const [showDefaultBanner, setShowDefaultBanner] = useState(false);
+  const [showUpdateCheck,   setShowUpdateCheck]   = useState(true);
 
   // ── Data ─────────────────────────────────────────────────────────
   const [bookmarkedUrls, setBookmarkedUrls] = useState([]);
@@ -543,6 +545,14 @@ export default function App() {
           />
         )}
       </div>
+
+      {/* Startup Update Check Overlay */}
+      {showUpdateCheck && (
+        <UpdateOverlay
+          electronAPI={electronAPI}
+          onFinished={() => setShowUpdateCheck(false)}
+        />
+      )}
     </div>
   );
 }

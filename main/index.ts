@@ -1,10 +1,89 @@
-import { app, BrowserWindow, Menu, ipcMain, session } from 'electron';
+import { app, BrowserWindow, Menu, ipcMain, session, dialog } from 'electron';
 import path from 'path';
 import os from 'os';
+import fs from 'fs';
+import crypto from 'crypto';
 import { registerIpcHandlers } from './ipc-handlers';
 import { autoUpdater } from 'electron-updater';
 import { ElectronBlocker } from '@cliqz/adblocker-electron';
 import fetch from 'cross-fetch';
+
+// This placeholder will be replaced with actual hashes by build-main.js in production build.
+// DO NOT MODIFY THIS LINE MANUALLY.
+const INTEGRITY_HASHES: Record<string, string> = {
+  'preload.cjs': 'DEVELOPMENT_PLACEHOLDER',
+  'ipc-handlers.cjs': 'DEVELOPMENT_PLACEHOLDER',
+  'index.html': 'DEVELOPMENT_PLACEHOLDER'
+};
+
+function verifyAppIntegrity() {
+  // 1. Block debugging CLI parameters
+  if (app.isPackaged) {
+    const blockedSwitches = ['inspect', 'inspect-brk', 'remote-debugging-port', 'remote-debugging-pipe'];
+    for (const sw of blockedSwitches) {
+      if (app.commandLine.hasSwitch(sw)) {
+        app.quit();
+        process.exit(1);
+      }
+    }
+  }
+
+  // 2. Validate Chromium/Electron runtime versions to prevent binary spoofing
+  const EXPECTED_ELECTRON = '29.4.6';
+  const EXPECTED_CHROME = '122.0.6261.156';
+  if (app.isPackaged) {
+    if (process.versions.electron !== EXPECTED_ELECTRON || process.versions.chrome !== EXPECTED_CHROME) {
+      dialog.showErrorBox(
+        'Ошибка безопасности / Security Error',
+        'Критический сбой проверки среды выполнения: версия Electron/Chromium изменена.'
+      );
+      app.quit();
+      process.exit(1);
+    }
+  }
+
+  // 3. Verify file hashes in production to check against code modification
+  if (app.isPackaged) {
+    const filesToCheck = {
+      'preload.cjs': path.join(__dirname, 'preload.cjs'),
+      'ipc-handlers.cjs': path.join(__dirname, 'ipc-handlers.cjs'),
+      'index.html': path.join(__dirname, '../dist/index.html')
+    };
+
+    for (const [key, filePath] of Object.entries(filesToCheck)) {
+      try {
+        if (!fs.existsSync(filePath)) {
+          throw new Error(`Отсутствует файл: ${key}`);
+        }
+        const fileContent = fs.readFileSync(filePath);
+        const hash = crypto.createHash('sha256').update(fileContent).digest('hex');
+        const expectedHash = INTEGRITY_HASHES[key];
+
+        if (expectedHash !== 'DEVELOPMENT_PLACEHOLDER' && hash !== expectedHash) {
+          dialog.showErrorBox(
+            'Ошибка целостности / Integrity Error',
+            `Обнаружено несанкционированное изменение компонентов приложения (${key}). Запуск заблокирован.`
+          );
+          app.quit();
+          process.exit(1);
+        }
+      } catch (err: any) {
+        dialog.showErrorBox(
+          'Критическая ошибка / Critical Error',
+          `Не удалось проверить целостность приложения: ${err.message || err}`
+        );
+        app.quit();
+        process.exit(1);
+      }
+    }
+  }
+}
+
+// Execute integrity checks immediately before setting up the application
+verifyAppIntegrity();
+
+// Enable sandbox globally
+app.enableSandbox();
 
 // --- System Analysis & Optimizations ---
 const totalRAM = os.totalmem() / (1024 * 1024 * 1024); // in GB
@@ -46,6 +125,8 @@ function createWindow() {
       preload: path.join(__dirname, 'preload.cjs'),
       nodeIntegration: false,
       contextIsolation: true,
+      sandbox: true,
+      webSecurity: true,
       webviewTag: true // Allow rendering other websites in tabs
     },
     // Gamer title bar color/design
@@ -66,13 +147,49 @@ function createWindow() {
   });
 }
 
-// Enable webview integration in modern Electron version
+// Enable webview integration and enforce renderer security
 app.on('web-contents-created', (event, contents) => {
+  // Close DevTools if opened in production
+  if (app.isPackaged) {
+    contents.on('devtools-opened', () => {
+      contents.closeDevTools();
+    });
+
+    // Block F12, Ctrl+Shift+I, Ctrl+Shift+J, Ctrl+Shift+C shortcuts
+    contents.on('before-input-event', (inputEvent, input) => {
+      const isDevToolsShortcut = 
+        input.key === 'F12' || 
+        ((input.control || input.meta) && input.shift && ['I', 'J', 'C'].includes(input.key.toUpperCase()));
+      if (isDevToolsShortcut) {
+        inputEvent.preventDefault();
+      }
+    });
+  }
+
   contents.on('will-attach-webview', (webviewEvent, webPreferences, params) => {
     // Enable standard security permissions on loaded webviews
     webPreferences.preload = path.join(__dirname, 'preload.cjs');
     webPreferences.nodeIntegration = false;
     webPreferences.contextIsolation = true;
+    webPreferences.sandbox = true;
+    webPreferences.webSecurity = true;
+  });
+
+  // Block non-HTTPS, non-kdg protocol redirects and navigations
+  contents.on('will-navigate', (navEvent, url) => {
+    try {
+      const parsedUrl = new URL(url);
+      if (
+        parsedUrl.protocol !== 'https:' && 
+        parsedUrl.protocol !== 'kdg:' && 
+        parsedUrl.hostname !== 'localhost' && 
+        parsedUrl.hostname !== '127.0.0.1'
+      ) {
+        navEvent.preventDefault();
+      }
+    } catch {
+      navEvent.preventDefault();
+    }
   });
 });
 
@@ -89,6 +206,19 @@ if (!gotTheLock) {
   });
 
   app.whenReady().then(async () => {
+    // Enforce Content Security Policy headers for all network requests
+    const setCSP = (ses: any) => {
+      ses.webRequest.onHeadersReceived((details: any, callback: any) => {
+        callback({
+          responseHeaders: {
+            ...details.responseHeaders,
+            'Content-Security-Policy': ["default-src 'self' 'unsafe-inline' 'unsafe-eval' https: wss: kdg:; object-src 'none'"]
+          }
+        });
+      });
+    };
+    setCSP(session.defaultSession);
+    setCSP(session.fromPartition('persist:kdg'));
   // Register custom protocol 'kdg://'
   if (process.defaultApp) {
     if (process.argv.length >= 2) {
