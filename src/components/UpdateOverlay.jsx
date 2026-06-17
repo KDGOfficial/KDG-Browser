@@ -13,10 +13,7 @@ export function UpdateOverlay({ electronAPI, onFinished }) {
       // In web development / browser testing mock environment
       setTimeout(() => {
         setStatus('no-available');
-        setTimeout(() => {
-          setVisible(false);
-          setTimeout(onFinished, 500);
-        }, 400);
+        onFinished();
       }, 500);
       return;
     }
@@ -31,11 +28,7 @@ export function UpdateOverlay({ electronAPI, onFinished }) {
         setInfo(data.info);
       } else if (currentStatus === 'update-not-available') {
         setStatus('no-available');
-        // Let the user see the "latest version" message before fading out
-        setTimeout(() => {
-          setVisible(false);
-          setTimeout(onFinished, 500);
-        }, 400);
+        onFinished();
       } else if (currentStatus === 'download-progress') {
         setStatus('downloading');
         setProgress(Math.round(data.progress || 0));
@@ -44,6 +37,7 @@ export function UpdateOverlay({ electronAPI, onFinished }) {
       } else if (currentStatus === 'error') {
         setStatus('error');
         setError(data.error || 'Произошла непредвиденная ошибка при поиске обновлений.');
+        onFinished();
       }
     });
 
@@ -69,7 +63,13 @@ export function UpdateOverlay({ electronAPI, onFinished }) {
     setTimeout(onFinished, 500);
   };
 
-  if (!visible) return null;
+  // Only show the overlay if an update is found, downloading, or downloaded.
+  // Otherwise, run silently in the background.
+  const isSilentStatus = status === 'checking' || status === 'no-available' || status === 'error';
+
+  if (!visible || isSilentStatus) {
+    return null;
+  }
 
   return (
     <div className="update-overlay-container" style={{ opacity: visible ? 1 : 0 }}>
