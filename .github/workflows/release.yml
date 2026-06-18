@@ -24,11 +24,13 @@ jobs:
 
       - name: Install Dependencies
         env:
+          npm_config_msvs_version: '2022'
           GYP_MSVS_VERSION: '2022'
-        run: npm ci
+        run: npm ci --msvs_version=2022
 
       - name: Build and Publish
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }} # Токен для создания релиза
+          npm_config_msvs_version: '2022'
           GYP_MSVS_VERSION: '2022'
         run: npm run publish:win
