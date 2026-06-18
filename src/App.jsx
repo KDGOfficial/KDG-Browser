@@ -13,7 +13,7 @@ import { Settings }       from './pages/Settings';
 import { UpdateOverlay }  from './components/UpdateOverlay';
 import { MigrationWizardOverlay } from './components/MigrationWizardOverlay';
 
-const BROWSER_VERSION = '3.4.16';
+const BROWSER_VERSION = '3.4.17';
 
 export default function App() {
   const electronAPI = window.electronAPI;
@@ -565,6 +565,7 @@ export default function App() {
                       const bookmarks = await electronAPI.getBookmarks();
                       if (bookmarks) setBookmarkedUrls(bookmarks.map(b => b.url));
                     }}
+                    onOpenMigrationWizard={() => setShowMigrationWizard(true)}
                   />
                 )}
             </>
