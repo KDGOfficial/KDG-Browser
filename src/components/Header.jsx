@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { 
   Plus, X, ArrowLeft, ArrowRight, RotateCw, Home as HomeIcon, 
   Star, BrainCircuit, Settings, Globe, Search as SearchIcon,
-  Lock, Shield, Download, MoreVertical, ChevronDown
+  Lock, Shield, Download, MoreVertical, ChevronDown, Minus, Square
 } from 'lucide-react';
 
 // Get favicon URL from any website
@@ -88,6 +88,19 @@ export function Header({
 
   return (
     <header className="browser-header">
+      {/* ── Window Controls ───────────────────────────── */}
+      <div className="window-controls">
+        <button className="window-control-btn" onClick={() => window.electron.ipcRenderer.send('window:minimize')} title="Свернуть">
+          <Minus size={14} />
+        </button>
+        <button className="window-control-btn" onClick={() => window.electron.ipcRenderer.send('window:maximize')} title="Развернуть">
+          <Square size={12} />
+        </button>
+        <button className="window-control-btn close" onClick={() => window.electron.ipcRenderer.send('window:close')} title="Закрыть">
+          <X size={16} />
+        </button>
+      </div>
+
       {/* ── Tab Strip ─────────────────────────────────── */}
       <div className="tab-strip">
         {tabs.map((tab) => {

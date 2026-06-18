@@ -133,11 +133,7 @@ function createWindow() {
       webSecurity: true,
       webviewTag: true
     },
-    titleBarStyle: 'hidden',
-    titleBarOverlay: {
-      color: '#00000000',
-      symbolColor: '#ffffff'
-    }
+    titleBarStyle: 'hidden'
   });
 
   // Load from Vite server in dev, local file in prod
@@ -169,6 +165,14 @@ app.on('web-contents-created', (event, contents) => {
         ((input.control || input.meta) && input.shift && ['I', 'J', 'C'].includes(input.key.toUpperCase()));
       if (isDevToolsShortcut) {
         inputEvent.preventDefault();
+      }
+      // F10 opens devtools (as requested)
+      if (input.key === 'F10' && input.type === 'keyDown') {
+        if (contents.isDevToolsOpened()) {
+          contents.closeDevTools();
+        } else {
+          contents.openDevTools();
+        }
       }
     });
   }
@@ -300,6 +304,91 @@ if (!gotTheLock) {
 
   // Setup Auto Updater
   autoUpdater.autoDownload = false;
+
+  // Window Controls IPC
+  ipcMain.on('window:minimize', () => {
+    if (mainWindow) mainWindow.minimize();
+  });
+  
+  ipcMain.on('window:maximize', () => {
+    if (mainWindow) {
+      if (mainWindow.isMaximized()) mainWindow.restore();
+      else mainWindow.maximize();
+    }
+  });
+  
+  ipcMain.on('window:close', () => {
+    if (mainWindow) mainWindow.close();
+  });
+
+  // Load unpacked Chrome Extensions
+  const extensionsDir = path.join(app.getPath('userData'), 'Extensions');
+  if (!fs.existsSync(extensionsDir)) {
+    fs.mkdirSync(extensionsDir, { recursive: true });
+  }
+
+  const loadExtensions = async () => {
+    try {
+      const dirs = fs.readdirSync(extensionsDir, { withFileTypes: true });
+      for (const dirent of dirs) {
+        if (dirent.isDirectory()) {
+          const extPath = path.join(extensionsDir, dirent.name);
+          try {
+            await session.defaultSession.loadExtension(extPath);
+            await session.fromPartition('persist:kdg').loadExtension(extPath);
+            console.log('Loaded extension:', dirent.name);
+          } catch (e) {
+            console.error('Failed to load extension', dirent.name, e);
+          }
+        }
+      }
+    } catch (e) {
+      console.error('Failed to read extensions directory', e);
+    }
+  };
+
+  await loadExtensions();
+
+  ipcMain.handle('extensions:loadUnpacked', async () => {
+    if (!mainWindow) return { success: false, error: 'No main window' };
+    const result = await dialog.showOpenDialog(mainWindow, {
+      properties: ['openDirectory'],
+      title: 'Выберите папку с распакованным расширением'
+    });
+    
+    if (result.canceled || result.filePaths.length === 0) {
+      return { success: false, error: 'Canceled' };
+    }
+    
+    const extPath = result.filePaths[0];
+    const extName = path.basename(extPath);
+    const destPath = path.join(extensionsDir, extName);
+    
+    try {
+      // Very basic copy to userData extensions dir
+      fs.cpSync(extPath, destPath, { recursive: true });
+      await session.defaultSession.loadExtension(destPath);
+      await session.fromPartition('persist:kdg').loadExtension(destPath);
+      return { success: true, name: extName };
+    } catch (e: any) {
+      return { success: false, error: e.message };
+    }
+  });
+
+  ipcMain.handle('extensions:getList', () => {
+    const defaultExts = session.defaultSession.getAllExtensions();
+    return defaultExts.map(e => ({ id: e.id, name: e.name, version: e.version }));
+  });
+
+  ipcMain.handle('extensions:remove', async (e, id) => {
+    try {
+      session.defaultSession.removeExtension(id);
+      session.fromPartition('persist:kdg').removeExtension(id);
+      return { success: true };
+    } catch (err: any) {
+      return { success: false, error: err.message };
+    }
+  });
 
   ipcMain.handle('updater:getVersion', () => {
     return app.getVersion();

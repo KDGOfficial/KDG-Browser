@@ -1,12 +1,58 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { Puzzle, Settings, Trash2, Power } from 'lucide-react';
 
 export function Extensions() {
-  // Placeholder extensions list
-  const extensions = [
+  const [extensions, setExtensions] = useState([
     { id: 'ext1', name: 'KDG AdBlocker Plus', description: 'Встроенный блокировщик рекламы и трекеров (включен на уровне движка).', version: '1.34.0', enabled: true, builtin: true },
     { id: 'ext2', name: 'KDG AI Assistant', description: 'Интеллектуальный помощник на базе Google Gemini. Помогает с видео и текстом.', version: '2.1.0', enabled: true, builtin: true },
-  ];
+  ]);
+
+  const fetchExtensions = () => {
+    if (window.electron?.ipcRenderer) {
+      window.electron.ipcRenderer.invoke('extensions:getList').then(exts => {
+        if (exts) {
+          const loaded = exts.map(e => ({
+            id: e.id,
+            name: e.name,
+            version: e.version,
+            description: 'Установленное расширение Chrome.',
+            enabled: true,
+            builtin: false
+          }));
+          setExtensions(prev => {
+            const builtins = prev.filter(p => p.builtin);
+            return [...builtins, ...loaded];
+          });
+        }
+      });
+    }
+  };
+
+  useEffect(() => {
+    fetchExtensions();
+  }, []);
+
+  const handleLoadUnpacked = async () => {
+    if (window.electron?.ipcRenderer) {
+      const result = await window.electron.ipcRenderer.invoke('extensions:loadUnpacked');
+      if (result.success) {
+        fetchExtensions();
+      } else if (result.error && result.error !== 'Canceled') {
+        alert('Ошибка при загрузке расширения: ' + result.error);
+      }
+    }
+  };
+
+  const handleRemove = async (id) => {
+    if (window.electron?.ipcRenderer) {
+      const result = await window.electron.ipcRenderer.invoke('extensions:remove', id);
+      if (result.success) {
+        fetchExtensions();
+      } else {
+        alert('Не удалось удалить расширение: ' + result.error);
+      }
+    }
+  };
 
   return (
     <div className="list-page-container">
@@ -18,8 +64,8 @@ export function Extensions() {
         <button
           className="gamer-btn"
           style={{ padding: '6px 12px', fontSize: '0.75rem' }}
-          disabled
-          title="В данный момент установка сторонних расширений ограничена"
+          onClick={handleLoadUnpacked}
+          title="Выберите папку с manifest.json"
         >
           Загрузить распакованное расширение
         </button>
@@ -68,7 +114,12 @@ export function Extensions() {
                 <Settings size={18} />
               </button>
               
-              <button className="nav-btn" title="Удалить" disabled={ext.builtin}>
+              <button 
+                className="nav-btn" 
+                title="Удалить" 
+                disabled={ext.builtin}
+                onClick={() => handleRemove(ext.id)}
+              >
                 <Trash2 size={18} />
               </button>
             </div>

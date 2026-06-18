@@ -4,3 +4,7 @@ dist-package/
 build/
 .env
 release/
+dist-electron/
+kdg-browser-data.json
+UserData/
+Extensions/

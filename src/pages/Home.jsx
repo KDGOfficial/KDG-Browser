@@ -1,5 +1,34 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Search } from 'lucide-react';
+import { Search, Plus, X, Globe } from 'lucide-react';
+
+function getFaviconUrl(url) {
+  if (!url || url.startsWith('kdg://')) return null;
+  try {
+    const domain = new URL(url.startsWith('http') ? url : `https://${url}`).hostname;
+    return `https://www.google.com/s2/favicons?domain=${domain}&sz=64`;
+  } catch {
+    return null;
+  }
+}
+
+function SiteFavicon({ url }) {
+  const [imgError, setImgError] = useState(false);
+  const faviconUrl = getFaviconUrl(url);
+
+  if (!faviconUrl || imgError) {
+    return <Globe size={24} style={{ color: 'var(--text-muted)' }} />;
+  }
+
+  return (
+    <img
+      src={faviconUrl}
+      width={28} height={28}
+      style={{ borderRadius: 4, objectFit: 'contain' }}
+      onError={() => setImgError(true)}
+      alt=""
+    />
+  );
+}
 
 const SEARCH_ENGINES = [
   {
@@ -61,18 +90,57 @@ const SEARCH_ENGINES = [
   }
 ];
 
-const QUICK_LINKS = [
-  { name: 'YouTube',   url: 'https://youtube.com',    icon: '▶', color: '#FF0000' },
-  { name: 'GitHub',    url: 'https://github.com',     icon: '⌥', color: '#ffffff' },
-  { name: 'Gmail',     url: 'https://mail.google.com',icon: '✉', color: '#EA4335' },
-  { name: 'Wikipedia', url: 'https://wikipedia.org',  icon: 'W', color: '#888' },
-  { name: 'Reddit',    url: 'https://reddit.com',     icon: '●', color: '#FF4500' },
-  { name: 'Twitter',   url: 'https://twitter.com',    icon: '✦', color: '#1DA1F2' },
-  { name: 'Steam',     url: 'https://store.steampowered.com', icon: '⊙', color: '#1b2838' },
-  { name: 'Twitch',    url: 'https://twitch.tv',      icon: '◈', color: '#9146FF' },
+const DEFAULT_QUICK_LINKS = [
+  { id: '1', name: 'YouTube',   url: 'https://youtube.com' },
+  { id: '2', name: 'GitHub',    url: 'https://github.com' },
+  { id: '3', name: 'Gmail',     url: 'https://mail.google.com' },
+  { id: '4', name: 'Reddit',    url: 'https://reddit.com' }
 ];
 
 export function Home({ onNavigateUrl }) {
+  const [quickLinks, setQuickLinks] = useState([]);
+  
+  useEffect(() => {
+    // Load links from IPC
+    if (window.electron?.ipcRenderer) {
+      window.electron.ipcRenderer.invoke('settings:get').then(settings => {
+        if (settings && settings.quickLinks) {
+          setQuickLinks(settings.quickLinks);
+        } else {
+          setQuickLinks(DEFAULT_QUICK_LINKS);
+        }
+      });
+    } else {
+      setQuickLinks(DEFAULT_QUICK_LINKS);
+    }
+  }, []);
+
+  const saveQuickLinks = (newLinks) => {
+    setQuickLinks(newLinks);
+    if (window.electron?.ipcRenderer) {
+      window.electron.ipcRenderer.invoke('settings:get').then(settings => {
+        window.electron.ipcRenderer.invoke('settings:save', { ...settings, quickLinks: newLinks });
+      });
+    }
+  };
+
+  const addQuickLink = () => {
+    const url = window.prompt('Введите URL сайта (например, https://example.com):');
+    if (!url) return;
+    const name = window.prompt('Введите название (необязательно):') || new URL(url.startsWith('http') ? url : `https://${url}`).hostname;
+    
+    const newLink = {
+      id: Date.now().toString(),
+      name,
+      url: url.startsWith('http') ? url : `https://${url}`
+    };
+    saveQuickLinks([...quickLinks, newLink]);
+  };
+
+  const removeQuickLink = (e, id) => {
+    e.stopPropagation();
+    saveQuickLinks(quickLinks.filter(l => l.id !== id));
+  };
   const [engine,   setEngine]  = useState('google');
   const [query,    setQuery]   = useState('');
   const [greeting]             = useState(() => {
@@ -180,19 +248,30 @@ export function Home({ onNavigateUrl }) {
         <div className="quick-links-section">
           <div className="quick-links-label">Быстрый доступ</div>
           <div className="quick-links-grid">
-            {QUICK_LINKS.map(link => (
-              <button
-                key={link.name}
-                className="quick-link-item"
-                onClick={() => handleQuickLink(link.url)}
-                title={link.url}
-              >
-                <div className="quick-link-icon" style={{ '--qc': link.color }}>
-                  {link.icon}
-                </div>
-                <span className="quick-link-name">{link.name}</span>
-              </button>
+            {quickLinks.map(link => (
+              <div key={link.id} className="quick-link-wrapper">
+                <button
+                  className="quick-link-item"
+                  onClick={() => handleQuickLink(link.url)}
+                  title={link.url}
+                >
+                  <div className="quick-link-icon-real">
+                    <SiteFavicon url={link.url} />
+                  </div>
+                  <span className="quick-link-name">{link.name}</span>
+                </button>
+                <button className="quick-link-remove" onClick={(e) => removeQuickLink(e, link.id)} title="Удалить">
+                  <X size={12} />
+                </button>
+              </div>
             ))}
+            
+            <button className="quick-link-item add-new" onClick={addQuickLink} title="Добавить сайт">
+              <div className="quick-link-icon-real add-icon">
+                <Plus size={24} />
+              </div>
+              <span className="quick-link-name">Добавить</span>
+            </button>
           </div>
         </div>
 

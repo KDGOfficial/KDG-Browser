@@ -173,6 +173,37 @@ button { cursor: pointer; border: none; background: none; }
   border-bottom: 1px solid var(--chrome-border);
   -webkit-app-region: drag;
   z-index: 200;
+  position: relative;
+}
+
+/* ─── Custom Window Controls ─────────────────────────────────── */
+.window-controls {
+  position: absolute;
+  top: 0;
+  right: 0;
+  display: flex;
+  height: 32px;
+  -webkit-app-region: no-drag;
+}
+.window-control-btn {
+  width: 46px;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: all var(--ease-fast);
+}
+.window-control-btn:hover {
+  background: var(--chrome-hover);
+  color: var(--text-primary);
+}
+.window-control-btn.close:hover {
+  background: #e81123;
+  color: white;
 }
 
 /* ─── Tab Strip ──────────────────────────────────────────────── */
@@ -699,6 +730,40 @@ webview {
   flex-wrap: wrap;
   gap: 12px;
   justify-content: center;
+}
+
+.quick-link-wrapper {
+  position: relative;
+  display: flex;
+}
+
+.quick-link-remove {
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: var(--chrome-toolbar);
+  border: 1px solid var(--glass-border);
+  color: var(--text-muted);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  transform: scale(0.8);
+  transition: all var(--ease-fast);
+  cursor: pointer;
+  z-index: 10;
+}
+.quick-link-wrapper:hover .quick-link-remove {
+  opacity: 1;
+  transform: scale(1);
+}
+.quick-link-remove:hover {
+  background: #e81123;
+  color: white;
+  border-color: #e81123;
 }
 
 .quick-link-item {

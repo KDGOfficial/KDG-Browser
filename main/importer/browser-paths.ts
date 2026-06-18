@@ -62,6 +62,14 @@ export function getAvailableBrowsers(): BrowserProfile[] {
       ]
     },
     {
+      id: 'comet',
+      name: 'Comet Browser',
+      type: 'chromium',
+      paths: [
+        path.join(localAppData, 'Comet', 'User Data'),
+      ]
+    },
+    {
       id: 'opera',
       name: 'Opera',
       type: 'chromium',
