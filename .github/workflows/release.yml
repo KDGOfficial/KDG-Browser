@@ -22,15 +22,13 @@ jobs:
           node-version: '20' # Требуемая версия Node
           cache: 'npm'
 
-      - name: Configure Build Environment
-        run: |
-          npm install -g npm@latest
-          npm config set msvs_version 2022
-
       - name: Install Dependencies
+        env:
+          GYP_MSVS_VERSION: '2022'
         run: npm ci
 
       - name: Build and Publish
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }} # Токен для создания релиза
+          GYP_MSVS_VERSION: '2022'
         run: npm run publish:win
