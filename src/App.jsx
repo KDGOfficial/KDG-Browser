@@ -13,7 +13,7 @@ import { Settings }       from './pages/Settings';
 import { UpdateOverlay }  from './components/UpdateOverlay';
 import { MigrationWizardOverlay } from './components/MigrationWizardOverlay';
 
-const BROWSER_VERSION = '3.4.13';
+const BROWSER_VERSION = '3.4.14';
 
 export default function App() {
   const electronAPI = window.electronAPI;
@@ -410,17 +410,25 @@ export default function App() {
     el.addEventListener('did-navigate', (e) => {
       setTabs(prev => prev.map(t => {
         if (t.id !== id) return t;
+        if (e.url === 'about:blank' || e.url === 'chrome-error://chromewebdata/') {
+          return { ...t, url: 'kdg://home', webviewUrl: 'about:blank', canGoBack: false };
+        }
         if (t.url.startsWith('kdg://')) {
           return { ...t, webviewUrl: e.url, canGoBack: el.canGoBack(), canGoForward: el.canGoForward() };
         }
         return { ...t, url: e.url, webviewUrl: e.url, canGoBack: el.canGoBack(), canGoForward: el.canGoForward() };
       }));
-      if (electronAPI && !e.url.startsWith('about:blank')) electronAPI.addHistory({ url: e.url, title: el.getTitle() || e.url }).catch(console.error);
+      if (electronAPI && !e.url.startsWith('about:blank') && e.url !== 'chrome-error://chromewebdata/') {
+        electronAPI.addHistory({ url: e.url, title: el.getTitle() || e.url }).catch(console.error);
+      }
     });
 
     el.addEventListener('did-navigate-in-page', (e) => {
       setTabs(prev => prev.map(t => {
         if (t.id !== id) return t;
+        if (e.url === 'about:blank' || e.url === 'chrome-error://chromewebdata/') {
+          return { ...t, url: 'kdg://home', webviewUrl: 'about:blank', canGoBack: false };
+        }
         if (t.url.startsWith('kdg://')) {
           return { ...t, webviewUrl: e.url, canGoBack: el.canGoBack(), canGoForward: el.canGoForward() };
         }
