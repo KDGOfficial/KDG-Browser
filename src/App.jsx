@@ -13,7 +13,7 @@ import { Settings }       from './pages/Settings';
 import { UpdateOverlay }  from './components/UpdateOverlay';
 import { MigrationWizardOverlay } from './components/MigrationWizardOverlay';
 
-const BROWSER_VERSION = '3.4.9';
+const BROWSER_VERSION = '3.4.10';
 
 export default function App() {
   const electronAPI = window.electronAPI;
@@ -35,6 +35,7 @@ export default function App() {
       id: 'tab-1',
       title: 'KDG Browser',
       url: 'kdg://home',
+      webviewUrl: 'about:blank',
       canGoBack: false,
       canGoForward: false,
       activeDashboardSection: 'home'
@@ -196,10 +197,12 @@ export default function App() {
   // ── Tab management ───────────────────────────────────────────────
   const handleAddTab = useCallback(() => {
     const newId = `tab-${Math.random().toString(36).slice(2, 9)}`;
+    const url = settings.homepage || 'kdg://home';
     const newTab = {
       id: newId,
       title: 'Новая вкладка',
-      url: settings.homepage || 'kdg://home',
+      url: url,
+      webviewUrl: url.startsWith('kdg://') ? 'about:blank' : url,
       canGoBack: false,
       canGoForward: false,
       activeDashboardSection: 'home'
@@ -260,6 +263,7 @@ export default function App() {
         ? { 
             ...t, 
             url: clean, 
+            webviewUrl: clean.startsWith('kdg://') ? (t.webviewUrl || 'about:blank') : clean,
             title: title, 
             activeDashboardSection: clean.startsWith('kdg://') ? activeSec : t.activeDashboardSection,
             activeVideo: clean.startsWith('kdg://') ? t.activeVideo : undefined 
@@ -308,7 +312,7 @@ export default function App() {
   const handleSelectVideo = (video, autoOpenAI = false) => {
     setTabs(prev => prev.map(t =>
       t.id === activeTabId
-        ? { ...t, url: `kdg://video/${video.id}`, title: `KDG: ${video.title}`, activeVideo: video }
+        ? { ...t, url: `kdg://video/${video.id}`, webviewUrl: t.webviewUrl || 'about:blank', title: `KDG: ${video.title}`, activeVideo: video }
         : t
     ));
     if (autoOpenAI) setIsAiOpen(true);
@@ -321,6 +325,7 @@ export default function App() {
             ...t, 
             activeDashboardSection: sec, 
             url: sec === 'settings' ? 'kdg://settings' : 'kdg://home', 
+            webviewUrl: t.webviewUrl || 'about:blank',
             activeVideo: undefined,
             title: sec === 'settings' ? 'Настройки' : 'KDG Browser'
           }
@@ -391,14 +396,14 @@ export default function App() {
 
     el.addEventListener('did-navigate', (e) => {
       setTabs(prev => prev.map(t =>
-        t.id === id ? { ...t, url: e.url, canGoBack: el.canGoBack(), canGoForward: el.canGoForward() } : t
+        t.id === id ? { ...t, url: e.url, webviewUrl: e.url, canGoBack: el.canGoBack(), canGoForward: el.canGoForward() } : t
       ));
       if (electronAPI) electronAPI.addHistory({ url: e.url, title: el.getTitle() || e.url }).catch(console.error);
     });
 
     el.addEventListener('did-navigate-in-page', (e) => {
       setTabs(prev => prev.map(t =>
-        t.id === id ? { ...t, url: e.url, canGoBack: el.canGoBack(), canGoForward: el.canGoForward() } : t
+        t.id === id ? { ...t, url: e.url, webviewUrl: e.url, canGoBack: el.canGoBack(), canGoForward: el.canGoForward() } : t
       ));
     });
 
@@ -420,6 +425,7 @@ export default function App() {
         id: newId,
         title: 'Загрузка...',
         url: e.url,
+        webviewUrl: e.url.startsWith('kdg://') ? 'about:blank' : e.url,
         canGoBack: false,
         canGoForward: false,
         activeDashboardSection: 'home'
@@ -538,7 +544,7 @@ export default function App() {
               <webview
                 key={tab.id}
                 ref={(el) => handleWebviewRef(tab.id, el)}
-                src={tab.url}
+                src={tab.webviewUrl || 'about:blank'}
                 partition="persist:kdg"
                 allowpopups="true"
                 style={{
