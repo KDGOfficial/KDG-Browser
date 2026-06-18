@@ -26,6 +26,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
   importBookmarks: (type: 'chrome' | 'edge') => ipcRenderer.invoke('bookmarks:import', type),
   importBookmarksDialog: () => ipcRenderer.invoke('bookmarks:importDialog'),
 
+  // Full Data Importer API
+  getAvailableBrowsers: () => ipcRenderer.invoke('importer:getAvailableBrowsers'),
+  runImport: (payload: { browserId: string; options: any }) => ipcRenderer.invoke('importer:runImport', payload),
+
   // Dialog API
   openImageDialog: () => ipcRenderer.invoke('dialog:openImage'),
 

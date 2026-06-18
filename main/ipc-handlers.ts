@@ -2,6 +2,9 @@ import { ipcMain, app, shell, dialog } from 'electron';
 import fs from 'fs';
 import path from 'path';
 import { GoogleGenerativeAI } from '@google/generative-ai';
+import { getAvailableBrowsers } from './importer/browser-paths';
+import { extractChromiumData } from './importer/chromium-extractor';
+import { extractFirefoxData } from './importer/firefox-extractor';
 
 const DATA_FILE = path.join(app.getPath('userData'), 'kdg-browser-data.json');
 
@@ -156,6 +159,70 @@ export function registerIpcHandlers() {
       shell.openExternal('ms-settings:defaultapps').catch(() => {});
     }
     return success;
+  });
+
+  // --- Import System Handlers ---
+  ipcMain.handle('importer:getAvailableBrowsers', () => {
+    return getAvailableBrowsers();
+  });
+
+  ipcMain.handle('importer:runImport', async (_, { browserId, options }) => {
+    try {
+      const browsers = getAvailableBrowsers();
+      const profile = browsers.find(b => b.id === browserId);
+      if (!profile) throw new Error('Browser not found');
+
+      let importedData;
+      if (profile.type === 'chromium') {
+        importedData = await extractChromiumData(profile, options);
+      } else {
+        importedData = await extractFirefoxData(profile, options);
+      }
+
+      const data = readData();
+      let importedCount = { bookmarks: 0, history: 0, passwords: 0, cookies: 0 };
+
+      if (importedData.bookmarks) {
+        importedData.bookmarks.forEach(item => {
+          const exists = data.bookmarks.some(b => b.url === item.url);
+          if (!exists) {
+            data.bookmarks.push({
+              id: Math.random().toString(36).substring(2, 9),
+              url: item.url,
+              title: item.title,
+              timestamp: Date.now()
+            });
+            importedCount.bookmarks++;
+          }
+        });
+      }
+
+      if (importedData.history) {
+        importedData.history.forEach(item => {
+          const exists = data.history.some(h => h.url === item.url);
+          if (!exists) {
+            data.history.push({
+              id: Math.random().toString(36).substring(2, 9),
+              url: item.url,
+              title: item.title,
+              timestamp: Date.now()
+            });
+            importedCount.history++;
+          }
+        });
+      }
+
+      if (importedData.passwords) importedCount.passwords = importedData.passwords.length;
+      if (importedData.cookies) importedCount.cookies = importedData.cookies.length;
+
+      data.history = data.history.sort((a, b) => b.timestamp - a.timestamp).slice(0, 2000);
+
+      writeData(data);
+      return { success: true, count: importedCount };
+    } catch (err: any) {
+      console.error('Error during import:', err);
+      return { success: false, error: err.message };
+    }
   });
 
   // --- Bookmarks Import Handlers ---

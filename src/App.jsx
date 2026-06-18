@@ -11,8 +11,9 @@ import { DownloadsPanel } from './components/DownloadsPanel';
 import { History }        from './pages/History';
 import { Settings }       from './pages/Settings';
 import { UpdateOverlay }  from './components/UpdateOverlay';
+import { MigrationWizardOverlay } from './components/MigrationWizardOverlay';
 
-const BROWSER_VERSION = '3.3.0';
+const BROWSER_VERSION = '3.4.0';
 
 export default function App() {
   const electronAPI = window.electronAPI;
@@ -24,6 +25,7 @@ export default function App() {
     theme: 'dark',
     homepage: 'kdg://home',
     hasPromptedDefault: false,
+    hasCompletedMigration: false,
     memorySaver: true
   });
 
@@ -47,6 +49,7 @@ export default function App() {
   const [isDownloadsOpen, setIsDownloadsOpen] = useState(false);
   const [showDefaultBanner, setShowDefaultBanner] = useState(false);
   const [showUpdateCheck,   setShowUpdateCheck]   = useState(true);
+  const [showMigrationWizard, setShowMigrationWizard] = useState(false);
 
   // ── Data ─────────────────────────────────────────────────────────
   const [bookmarkedUrls, setBookmarkedUrls] = useState([]);
@@ -65,6 +68,9 @@ export default function App() {
           const loadedSettings = await electronAPI.getSettings();
           if (loadedSettings) {
             setSettings(prev => ({ ...prev, ...loadedSettings }));
+            if (loadedSettings.hasCompletedMigration === undefined || loadedSettings.hasCompletedMigration === false) {
+              setShowMigrationWizard(true);
+            }
           }
 
           const bookmarks = await electronAPI.getBookmarks();
@@ -551,6 +557,18 @@ export default function App() {
         <UpdateOverlay
           electronAPI={electronAPI}
           onFinished={() => setShowUpdateCheck(false)}
+        />
+      )}
+
+      {/* Migration Wizard Overlay */}
+      {!showUpdateCheck && showMigrationWizard && (
+        <MigrationWizardOverlay
+          electronAPI={electronAPI}
+          onFinished={async () => {
+            setShowMigrationWizard(false);
+            const updated = { ...settings, hasCompletedMigration: true };
+            await handleSaveSettings(updated);
+          }}
         />
       )}
     </div>

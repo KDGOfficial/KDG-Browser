@@ -4,7 +4,7 @@ import {
   Download, RefreshCw, Layers, Cpu, CheckCircle, AlertCircle
 } from 'lucide-react';
 
-export function Settings({ settings, onSaveSettings, onRefreshBookmarks }) {
+export function Settings({ settings, onSaveSettings, onRefreshBookmarks, onOpenMigrationWizard }) {
   const electronAPI = window.electronAPI;
   
   const [localSettings, setLocalSettings] = useState({
@@ -320,17 +320,14 @@ export function Settings({ settings, onSaveSettings, onRefreshBookmarks }) {
             <p className="section-description">Перенесите ваши закладки и историю из других браузеров в KDG Browser</p>
 
             <div className="settings-card">
-              <h3>Быстрый импорт закладок</h3>
+              <h3>Комплексный импорт данных</h3>
               <p className="settings-subtext" style={{ marginBottom: '16px' }}>
-                Мы автоматически найдем и перенесем закладки из установленных на вашем компьютере браузеров.
+                Мастер миграции поможет перенести закладки, историю посещений, пароли и настройки из любого установленного браузера.
               </p>
 
               <div className="import-buttons-row">
-                <button className="gamer-btn gamer-btn-orange" onClick={() => handleImport('chrome')}>
-                  Импортировать из Google Chrome
-                </button>
-                <button className="gamer-btn gamer-btn-orange" onClick={() => handleImport('edge')}>
-                  Импортировать из Microsoft Edge
+                <button className="gamer-btn gamer-btn-orange" onClick={onOpenMigrationWizard}>
+                  Запустить Мастер миграции
                 </button>
               </div>
 
