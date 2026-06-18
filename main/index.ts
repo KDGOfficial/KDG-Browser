@@ -120,17 +120,24 @@ function createWindow() {
     minWidth: 1000,
     minHeight: 650,
     title: 'KDG Browser',
-    backgroundColor: '#0d0d12',
+    backgroundColor: '#00000000', // Transparent for Mica/Aero
+    transparent: true,
+    vibrancy: 'under-window',
+    visualEffectState: 'active',
+    backgroundMaterial: 'mica',
     webPreferences: {
       preload: path.join(__dirname, 'preload.cjs'),
       nodeIntegration: false,
       contextIsolation: true,
       sandbox: true,
       webSecurity: true,
-      webviewTag: true // Allow rendering other websites in tabs
+      webviewTag: true
     },
-    // Gamer title bar color/design
-    titleBarStyle: 'default'
+    titleBarStyle: 'hidden',
+    titleBarOverlay: {
+      color: '#00000000',
+      symbolColor: '#ffffff'
+    }
   });
 
   // Load from Vite server in dev, local file in prod

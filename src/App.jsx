@@ -10,10 +10,12 @@ import { AIAssistant }   from './components/AIAssistant';
 import { DownloadsPanel } from './components/DownloadsPanel';
 import { History }        from './pages/History';
 import { Settings }       from './pages/Settings';
+import { Downloads }      from './pages/Downloads';
+import { Extensions }     from './pages/Extensions';
 import { UpdateOverlay }  from './components/UpdateOverlay';
 import { MigrationWizardOverlay } from './components/MigrationWizardOverlay';
 
-const BROWSER_VERSION = '3.4.21';
+const BROWSER_VERSION = '3.5.0';
 
 export default function App() {
   const electronAPI = window.electronAPI;
@@ -545,6 +547,12 @@ export default function App() {
                 )}
                 {activeTab.activeDashboardSection === 'history' && (
                   <History onNavigateUrl={(url) => handleNavigate(url)} />
+                )}
+                {activeTab.activeDashboardSection === 'downloads' && (
+                  <Downloads downloads={downloads} onClearAll={() => setDownloads([])} />
+                )}
+                {activeTab.activeDashboardSection === 'extensions' && (
+                  <Extensions />
                 )}
                 {activeTab.activeDashboardSection === 'ai' && (
                   <div style={{ display: 'flex', flexDirection: 'column', height: '100%', padding: '24px' }}>

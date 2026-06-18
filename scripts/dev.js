@@ -16,7 +16,7 @@ async function compileMain() {
       platform: 'node',
       format: 'cjs',
       outdir: 'dist-electron',
-      external: ['electron'],
+      external: ['electron', 'better-sqlite3'],
       sourcemap: 'inline',
       outExtension: { '.js': '.cjs' }
     });

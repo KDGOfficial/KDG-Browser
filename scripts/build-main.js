@@ -46,7 +46,8 @@ async function compileMain() {
       '@cliqz/adblocker-electron', 
       'cross-fetch', 
       'electron-updater',
-      '@google/generative-ai'
+      '@google/generative-ai',
+      'better-sqlite3'
     ],
     minify: true,
     outExtension: { '.js': '.cjs' }

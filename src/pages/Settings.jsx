@@ -294,7 +294,8 @@ export function Settings({ settings, onSaveSettings, onRefreshBookmarks, onOpenM
                   {[
                     { id: 'dark', name: 'Тёмная ночь', desc: 'Классический темный интерфейс', color: '#1a1a2e' },
                     { id: 'gamer', name: 'Геймерский стиль', desc: 'Глубокий темный с неоновым рубином', color: '#0d0d12' },
-                    { id: 'light', name: 'Светлая тема', desc: 'Свежий и чистый светлый дизайн', color: '#f8fafc' }
+                    { id: 'light', name: 'Светлая тема', desc: 'Свежий и чистый светлый дизайн', color: '#f8fafc' },
+                    { id: 'aero', name: 'Aero Glass', desc: 'Полностью прозрачный стеклянный дизайн', color: 'rgba(56, 189, 248, 0.4)' }
                   ].map(t => (
                     <button
                       key={t.id}
