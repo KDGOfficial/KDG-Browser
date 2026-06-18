@@ -22,6 +22,11 @@ jobs:
           node-version: '20' # Требуемая версия Node
           cache: 'npm'
 
+      - name: Configure Build Environment
+        run: |
+          npm install -g npm@latest
+          npm config set msvs_version 2022
+
       - name: Install Dependencies
         run: npm ci
 

@@ -163,7 +163,14 @@ export function registerIpcHandlers() {
 
   // --- Import System Handlers ---
   ipcMain.handle('importer:getAvailableBrowsers', () => {
-    return getAvailableBrowsers();
+    try {
+      const browsers = getAvailableBrowsers();
+      console.log('[Importer] Detected browsers:', browsers.map(b => b.name));
+      return browsers;
+    } catch (err) {
+      console.error('[Importer] Failed to detect browsers:', err);
+      return [];
+    }
   });
 
   ipcMain.handle('importer:runImport', async (_, { browserId, options }) => {
@@ -420,56 +427,6 @@ export function registerIpcHandlers() {
       return true;
     }
     return false;
-  });
-
-  // --- Browser Data Importer Handlers ---
-  ipcMain.handle('importer:getAvailableBrowsers', () => {
-    try {
-      const browsers = getAvailableBrowsers();
-      console.log('[Importer] Detected browsers:', browsers.map(b => b.name));
-      return browsers;
-    } catch (err) {
-      console.error('[Importer] Failed to detect browsers:', err);
-      return [];
-    }
-  });
-
-  ipcMain.handle('importer:runImport', async (_, { browserId, options }: { browserId: string; options: { bookmarks?: boolean; history?: boolean; passwords?: boolean; cookies?: boolean } }) => {
-    try {
-      const browsers = getAvailableBrowsers();
-      const browser = browsers.find(b => b.id === browserId);
-
-      if (!browser) {
-        return { success: false, error: `Браузер с ID "${browserId}" не найден или не установлен.` };
-      }
-
-      console.log(`[Importer] Starting import from ${browser.name}...`);
-
-      let result: { bookmarks: number; history: number; passwords: number; cookies: number };
-
-      if (browser.type === 'chromium') {
-        result = await extractChromiumData(browser, options);
-      } else if (browser.type === 'firefox') {
-        result = await extractFirefoxData(browser, options);
-      } else {
-        return { success: false, error: 'Неизвестный тип браузера.' };
-      }
-
-      // Merge imported data into our data file
-      const data = readData();
-
-      if (options.bookmarks && result.bookmarks > 0) {
-        // Bookmarks are merged by extractors directly into the file or returned
-        // Here we just report the count. The extractors write to their own structures.
-      }
-
-      console.log(`[Importer] Import complete:`, result);
-      return { success: true, count: result };
-
-    } catch (err: any) {
-      console.error('[Importer] Import failed:', err);
-      return { success: false, error: err.message || 'Неизвестная ошибка при импорте.' };
-    }
   });
 }
 
