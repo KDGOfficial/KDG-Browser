@@ -124,7 +124,7 @@ export function Header({
           <button
             className="nav-btn"
             onClick={handleGoBack}
-            disabled={activeTab?.url?.startsWith('kdg://') || !activeTab?.canGoBack}
+            disabled={!activeTab?.canGoBack}
             title="Назад (Alt+←)"
           >
             <ArrowLeft size={16} />
@@ -132,7 +132,7 @@ export function Header({
           <button
             className="nav-btn"
             onClick={handleGoForward}
-            disabled={activeTab?.url?.startsWith('kdg://') || !activeTab?.canGoForward}
+            disabled={!activeTab?.canGoForward}
             title="Вперёд (Alt+→)"
           >
             <ArrowRight size={16} />

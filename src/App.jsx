@@ -13,7 +13,7 @@ import { Settings }       from './pages/Settings';
 import { UpdateOverlay }  from './components/UpdateOverlay';
 import { MigrationWizardOverlay } from './components/MigrationWizardOverlay';
 
-const BROWSER_VERSION = '3.4.2';
+const BROWSER_VERSION = '3.4.9';
 
 export default function App() {
   const electronAPI = window.electronAPI;
@@ -57,6 +57,12 @@ export default function App() {
 
   // Webview refs
   const webviewRefs = useRef({});
+  const initializedWebviews = useRef(new WeakSet());
+
+  const activeTabIdRef = useRef(activeTabId);
+  useEffect(() => {
+    activeTabIdRef.current = activeTabId;
+  }, [activeTabId]);
 
   const activeTab = tabs.find(t => t.id === activeTabId) || tabs[0];
 
@@ -174,6 +180,14 @@ export default function App() {
       }
       if (e.key === 'F5') { e.preventDefault(); handleRefresh(); }
       if (e.key === 'F6') { e.preventDefault(); document.querySelector('.address-bar-input')?.focus(); }
+      if (e.key === 'F12') {
+        e.preventDefault();
+        const wv = webviewRefs.current[activeTabId];
+        if (wv && wv.isDevToolsOpened) {
+          if (wv.isDevToolsOpened()) wv.closeDevTools();
+          else wv.openDevTools();
+        }
+      }
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
@@ -363,12 +377,17 @@ export default function App() {
 
   // ── Webview listeners ────────────────────────────────────────────
   const handleWebviewRef = useCallback((id, el) => {
-    if (!el || webviewRefs.current[id]) return;
+    if (!el) return;
+    if (initializedWebviews.current.has(el)) {
+      if (webviewRefs.current[id] !== el) webviewRefs.current[id] = el;
+      return;
+    }
+    initializedWebviews.current.add(el);
     webviewRefs.current[id] = el;
 
-    el.addEventListener('did-start-loading',  () => { if (id === activeTabId) setIsLoading(true);  });
-    el.addEventListener('did-stop-loading',   () => { if (id === activeTabId) setIsLoading(false); });
-    el.addEventListener('did-finish-load',    () => { if (id === activeTabId) setIsLoading(false); });
+    el.addEventListener('did-start-loading',  () => { if (id === activeTabIdRef.current) setIsLoading(true);  });
+    el.addEventListener('did-stop-loading',   () => { if (id === activeTabIdRef.current) setIsLoading(false); });
+    el.addEventListener('did-finish-load',    () => { if (id === activeTabIdRef.current) setIsLoading(false); });
 
     el.addEventListener('did-navigate', (e) => {
       setTabs(prev => prev.map(t =>
@@ -465,73 +484,71 @@ export default function App() {
 
       {/* Main area */}
       <div className="main-layout">
-        {activeTab.url.startsWith('kdg://') ? (
-          <div style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
-            <Navigation
-              activeSection={activeTab.activeDashboardSection}
-              setActiveSection={setDashboardSection}
-            />
-            <div className="content-viewport">
-              <>
-                  {activeTab.activeDashboardSection === 'home' && (
-                    <Home onNavigateUrl={(url) => handleNavigate(url)} />
-                  )}
-                  {activeTab.activeDashboardSection === 'search' && (
-                    <Search onNavigateUrl={(url) => handleNavigate(url)} />
-                  )}
-                  {activeTab.activeDashboardSection === 'favorites' && (
-                    <Favorites onNavigateUrl={(url) => handleNavigate(url)} />
-                  )}
-                  {activeTab.activeDashboardSection === 'history' && (
-                    <History onNavigateUrl={(url) => handleNavigate(url)} />
-                  )}
-                  {activeTab.activeDashboardSection === 'ai' && (
-                    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', padding: '24px' }}>
-                      <div className="section-header">
-                        <BrainCircuit size={16} style={{ color: 'var(--accent)' }} />
-                        ИИ Лаборатория — Общий чат
-                      </div>
-                      <div className="cyber-panel" style={{ flex: 1, overflow: 'hidden', padding: 0 }}>
-                        <AIAssistant isOpen={true} onClose={() => {}} />
-                      </div>
+        <div style={{ display: activeTab.url.startsWith('kdg://') ? 'flex' : 'none', flex: 1, overflow: 'hidden' }}>
+          <Navigation
+            activeSection={activeTab.activeDashboardSection}
+            setActiveSection={setDashboardSection}
+          />
+          <div className="content-viewport">
+            <>
+                {activeTab.activeDashboardSection === 'home' && (
+                  <Home onNavigateUrl={(url) => handleNavigate(url)} />
+                )}
+                {activeTab.activeDashboardSection === 'search' && (
+                  <Search onNavigateUrl={(url) => handleNavigate(url)} />
+                )}
+                {activeTab.activeDashboardSection === 'favorites' && (
+                  <Favorites onNavigateUrl={(url) => handleNavigate(url)} />
+                )}
+                {activeTab.activeDashboardSection === 'history' && (
+                  <History onNavigateUrl={(url) => handleNavigate(url)} />
+                )}
+                {activeTab.activeDashboardSection === 'ai' && (
+                  <div style={{ display: 'flex', flexDirection: 'column', height: '100%', padding: '24px' }}>
+                    <div className="section-header">
+                      <BrainCircuit size={16} style={{ color: 'var(--accent)' }} />
+                      ИИ Лаборатория — Общий чат
                     </div>
-                  )}
-                  {activeTab.activeDashboardSection === 'settings' && (
-                    <Settings
-                      settings={settings}
-                      onSaveSettings={handleSaveSettings}
-                      onRefreshBookmarks={async () => {
-                        const bookmarks = await electronAPI.getBookmarks();
-                        if (bookmarks) setBookmarkedUrls(bookmarks.map(b => b.url));
-                      }}
-                    />
-                  )}
-              </>
-            </div>
+                    <div className="cyber-panel" style={{ flex: 1, overflow: 'hidden', padding: 0 }}>
+                      <AIAssistant isOpen={true} onClose={() => {}} />
+                    </div>
+                  </div>
+                )}
+                {activeTab.activeDashboardSection === 'settings' && (
+                  <Settings
+                    settings={settings}
+                    onSaveSettings={handleSaveSettings}
+                    onRefreshBookmarks={async () => {
+                      const bookmarks = await electronAPI.getBookmarks();
+                      if (bookmarks) setBookmarkedUrls(bookmarks.map(b => b.url));
+                    }}
+                  />
+                )}
+            </>
           </div>
-        ) : (
-          // Webview for real websites
-          <div className="webview-container">
-            {tabs.map(tab => {
-              if (tab.isSleeping && tab.id !== activeTabId) {
-                return <div key={tab.id} style={{ display: 'none' }} />;
-              }
-              return (
-                <webview
-                  key={tab.id}
-                  ref={(el) => handleWebviewRef(tab.id, el)}
-                  src={tab.url}
-                  partition="persist:kdg"
-                  allowpopups="true"
-                  style={{
-                    width: '100%', height: '100%',
-                    display: tab.id === activeTabId ? 'flex' : 'none'
-                  }}
-                />
-              );
-            })}
-          </div>
-        )}
+        </div>
+
+        {/* Webview for real websites */}
+        <div className="webview-container" style={{ display: activeTab.url.startsWith('kdg://') ? 'none' : 'block' }}>
+          {tabs.map(tab => {
+            if (tab.isSleeping && tab.id !== activeTabId) {
+              return <div key={tab.id} style={{ display: 'none' }} />;
+            }
+            return (
+              <webview
+                key={tab.id}
+                ref={(el) => handleWebviewRef(tab.id, el)}
+                src={tab.url}
+                partition="persist:kdg"
+                allowpopups="true"
+                style={{
+                  width: '100%', height: '100%',
+                  display: (tab.id === activeTabId && !tab.url.startsWith('kdg://')) ? 'flex' : 'none'
+                }}
+              />
+            );
+          })}
+        </div>
 
         {/* AI Drawer */}
         <AIAssistant
