@@ -429,4 +429,3 @@ export function registerIpcHandlers() {
     return false;
   });
 }
-
