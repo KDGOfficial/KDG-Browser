@@ -166,6 +166,14 @@ export function getAvailableBrowsers(): BrowserProfile[] {
         path.join(localAppData, 'CocCoc', 'Browser', 'User Data'),
       ]
     },
+    {
+      id: 'comet',
+      name: 'Comet',
+      type: 'chromium',
+      paths: [
+        path.join(localAppData, 'Comet', 'User Data'),
+      ]
+    },
   ];
 
   // Filter to only browsers actually installed (i.e. their data folder exists)
