@@ -13,7 +13,7 @@ import { Settings }       from './pages/Settings';
 import { UpdateOverlay }  from './components/UpdateOverlay';
 import { MigrationWizardOverlay } from './components/MigrationWizardOverlay';
 
-const BROWSER_VERSION = '3.4.11';
+const BROWSER_VERSION = '3.4.12';
 
 export default function App() {
   const electronAPI = window.electronAPI;
@@ -278,8 +278,21 @@ export default function App() {
 
   const handleAddressSubmit = (e) => { e.preventDefault(); handleNavigate(addressValue); };
 
-  const handleGoBack    = () => { const wv = webviewRefs.current[activeTabId]; if (wv?.canGoBack())    wv.goBack(); };
-  const handleGoForward = () => { const wv = webviewRefs.current[activeTabId]; if (wv?.canGoForward()) wv.goForward(); };
+  const handleGoBack = () => { 
+    if (activeTab.url.startsWith('kdg://')) {
+      if (activeTab.webviewUrl && activeTab.webviewUrl !== 'about:blank') {
+        setTabs(prev => prev.map(t => t.id === activeTabId ? { ...t, url: t.webviewUrl, activeDashboardSection: undefined, activeVideo: undefined } : t));
+      }
+      return;
+    }
+    const wv = webviewRefs.current[activeTabId]; 
+    if (wv?.canGoBack()) wv.goBack(); 
+  };
+  const handleGoForward = () => { 
+    if (activeTab.url.startsWith('kdg://')) return;
+    const wv = webviewRefs.current[activeTabId]; 
+    if (wv?.canGoForward()) wv.goForward(); 
+  };
   const handleRefresh   = () => {
     const wv = webviewRefs.current[activeTabId];
     if (wv) { if (isLoading) wv.stop(); else wv.reload(); }
@@ -395,16 +408,24 @@ export default function App() {
     el.addEventListener('did-finish-load',    () => { if (id === activeTabIdRef.current) setIsLoading(false); });
 
     el.addEventListener('did-navigate', (e) => {
-      setTabs(prev => prev.map(t =>
-        t.id === id ? { ...t, url: e.url, webviewUrl: e.url, canGoBack: el.canGoBack(), canGoForward: el.canGoForward() } : t
-      ));
-      if (electronAPI) electronAPI.addHistory({ url: e.url, title: el.getTitle() || e.url }).catch(console.error);
+      setTabs(prev => prev.map(t => {
+        if (t.id !== id) return t;
+        if (t.url.startsWith('kdg://')) {
+          return { ...t, webviewUrl: e.url, canGoBack: el.canGoBack(), canGoForward: el.canGoForward() };
+        }
+        return { ...t, url: e.url, webviewUrl: e.url, canGoBack: el.canGoBack(), canGoForward: el.canGoForward() };
+      }));
+      if (electronAPI && !e.url.startsWith('about:blank')) electronAPI.addHistory({ url: e.url, title: el.getTitle() || e.url }).catch(console.error);
     });
 
     el.addEventListener('did-navigate-in-page', (e) => {
-      setTabs(prev => prev.map(t =>
-        t.id === id ? { ...t, url: e.url, webviewUrl: e.url, canGoBack: el.canGoBack(), canGoForward: el.canGoForward() } : t
-      ));
+      setTabs(prev => prev.map(t => {
+        if (t.id !== id) return t;
+        if (t.url.startsWith('kdg://')) {
+          return { ...t, webviewUrl: e.url, canGoBack: el.canGoBack(), canGoForward: el.canGoForward() };
+        }
+        return { ...t, url: e.url, webviewUrl: e.url, canGoBack: el.canGoBack(), canGoForward: el.canGoForward() };
+      }));
     });
 
     el.addEventListener('page-title-updated', (e) => {
@@ -442,6 +463,14 @@ export default function App() {
 
   const isBookmarked = bookmarkedUrls.includes(activeTab?.url);
 
+  const currentCanGoBack = activeTab?.url.startsWith('kdg://') 
+    ? (activeTab?.webviewUrl && activeTab?.webviewUrl !== 'about:blank') 
+    : activeTab?.canGoBack;
+    
+  const currentCanGoForward = activeTab?.url.startsWith('kdg://')
+    ? false
+    : activeTab?.canGoForward;
+
   return (
     <div className="app-container">
       {/* Header */}
@@ -458,7 +487,7 @@ export default function App() {
         handleGoForward={handleGoForward}
         handleRefresh={handleRefresh}
         handleGoHome={handleGoHome}
-        activeTab={activeTab}
+        activeTab={{ ...activeTab, canGoBack: currentCanGoBack, canGoForward: currentCanGoForward }}
         isLoading={isLoading}
         isAiOpen={isAiOpen}
         setIsAiOpen={setIsAiOpen}
