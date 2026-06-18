@@ -13,7 +13,7 @@ import { Settings }       from './pages/Settings';
 import { UpdateOverlay }  from './components/UpdateOverlay';
 import { MigrationWizardOverlay } from './components/MigrationWizardOverlay';
 
-const BROWSER_VERSION = '3.4.12';
+const BROWSER_VERSION = '3.4.13';
 
 export default function App() {
   const electronAPI = window.electronAPI;
@@ -564,11 +564,25 @@ export default function App() {
         </div>
 
         {/* Webview for real websites */}
-        <div className="webview-container" style={{ display: activeTab.url.startsWith('kdg://') ? 'none' : 'block' }}>
+        <div 
+          className="webview-container" 
+          style={{ 
+            position: activeTab.url.startsWith('kdg://') ? 'absolute' : 'relative',
+            left: activeTab.url.startsWith('kdg://') ? '-9999px' : '0',
+            top: 0,
+            width: '100%',
+            height: '100%',
+            flex: 1,
+            overflow: 'hidden',
+            opacity: activeTab.url.startsWith('kdg://') ? 0 : 1,
+            pointerEvents: activeTab.url.startsWith('kdg://') ? 'none' : 'auto'
+          }}
+        >
           {tabs.map(tab => {
             if (tab.isSleeping && tab.id !== activeTabId) {
-              return <div key={tab.id} style={{ display: 'none' }} />;
+              return null;
             }
+            const isTabActive = tab.id === activeTabId;
             return (
               <webview
                 key={tab.id}
@@ -577,8 +591,14 @@ export default function App() {
                 partition="persist:kdg"
                 allowpopups="true"
                 style={{
-                  width: '100%', height: '100%',
-                  display: (tab.id === activeTabId && !tab.url.startsWith('kdg://')) ? 'flex' : 'none'
+                  position: 'absolute',
+                  top: 0,
+                  left: isTabActive ? '0' : '-9999px',
+                  width: '100%', 
+                  height: '100%',
+                  opacity: isTabActive ? 1 : 0,
+                  pointerEvents: isTabActive ? 'auto' : 'none',
+                  zIndex: isTabActive ? 1 : -1
                 }}
               />
             );
