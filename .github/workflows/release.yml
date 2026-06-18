@@ -28,10 +28,19 @@ jobs:
           call "C:\Program Files\Microsoft Visual Studio\18\Enterprise\VC\Auxiliary\Build\vcvarsall.bat" x64
           npm ci
 
-      - name: Build and Publish
+      - name: Build Application
         shell: cmd
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }} # Токен для создания релиза
         run: |
           call "C:\Program Files\Microsoft Visual Studio\18\Enterprise\VC\Auxiliary\Build\vcvarsall.bat" x64
-          npm run publish:win
+          npm run build:win
+
+      - name: Publish Release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: 'dist-package/KDG Browser Setup *.exe'
+          tag_name: ${{ github.ref_name }}
+          name: KDG Browser ${{ github.ref_name }}
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
