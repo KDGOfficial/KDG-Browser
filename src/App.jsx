@@ -13,7 +13,7 @@ import { Settings }       from './pages/Settings';
 import { UpdateOverlay }  from './components/UpdateOverlay';
 import { MigrationWizardOverlay } from './components/MigrationWizardOverlay';
 
-const BROWSER_VERSION = '3.4.19';
+const BROWSER_VERSION = '3.4.20';
 
 export default function App() {
   const electronAPI = window.electronAPI;
