@@ -23,21 +23,17 @@ jobs:
           cache: 'npm'
 
       - name: Install Dependencies
-        shell: cmd
-        run: |
-          call "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Auxiliary\Build\vcvarsall.bat" x64
-          npm ci
+        run: npm ci
 
       - name: Build Application
-        shell: cmd
-        run: |
-          call "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Auxiliary\Build\vcvarsall.bat" x64
-          npm run build:win
+        run: npm run build:win
 
       - name: Publish Release
         uses: softprops/action-gh-release@v1
         with:
-          files: 'dist-package/KDG Browser Setup *.exe'
+          files: |
+            dist-package/KDG Browser Setup *.exe
+            dist-package/latest.yml
           tag_name: ${{ github.ref_name }}
           name: KDG Browser ${{ github.ref_name }}
           draft: false
