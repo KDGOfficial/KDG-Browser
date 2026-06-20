@@ -15,6 +15,20 @@ import { ipcRenderer } from 'electron';
 
   // --- Chrome Web Store compatibility shim ---
 
+  // Spoof userAgentData so CWS thinks we are Google Chrome 131
+  Object.defineProperty(navigator, 'userAgentData', {
+    get: () => ({
+      brands: [
+        { brand: 'Google Chrome', version: '131' },
+        { brand: 'Chromium', version: '131' },
+        { brand: 'Not_A Brand', version: '24' }
+      ],
+      mobile: false,
+      platform: 'Windows'
+    }),
+    configurable: true
+  });
+
   function installExtension(extId: string, onSuccess?: Function, onFailure?: Function) {
     if (!extId || !/^[a-z]{32}$/.test(extId)) {
       if (typeof onFailure === 'function') onFailure(-1, 'Invalid extension ID');
@@ -38,7 +52,7 @@ import { ipcRenderer } from 'electron';
   }
   const chrome = (window as any).chrome;
 
-  // Inject chrome.webstore
+  // Inject chrome.webstore and chrome.webstorePrivate
   chrome.webstore = {
     install: function (url: string, onSuccess: Function, onFailure: Function) {
       const extId = extractExtId(url);
@@ -59,6 +73,23 @@ import { ipcRenderer } from 'electron';
       removeListener: function () {},
       hasListener: function () { return false; },
       hasListeners: function () { return false; }
+    }
+  };
+
+  chrome.webstorePrivate = {
+    getExtensionStatus: function(id: string, cb: Function) {
+      if (typeof cb === 'function') cb('installable');
+    },
+    beginInstallWithManifest3: function(details: any, cb: Function) {
+      const id = details.id || extractExtId(location.href);
+      if (id) installExtension(id);
+      if (typeof cb === 'function') cb('success');
+    },
+    completeInstall: function(id: string, cb: Function) {
+      if (typeof cb === 'function') cb();
+    },
+    getIsAuthor: function(cb: Function) {
+      if (typeof cb === 'function') cb(false);
     }
   };
 
