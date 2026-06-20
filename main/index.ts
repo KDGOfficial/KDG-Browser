@@ -309,7 +309,8 @@ app.on('web-contents-created', (event, contents) => {
 
   // Handle webview after it's attached
   contents.on('did-attach-webview', (attachEvent, webviewContents) => {
-    const CHROME_UA = `Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/${process.versions.chrome} Safari/537.36`;
+    const CHROME_VERSION = '131.0.6778.205'; // Override for Chrome Web Store compatibility
+    const CHROME_UA = `Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/${CHROME_VERSION} Safari/537.36`;
     webviewContents.setUserAgent(CHROME_UA);
 
     // Listen for IPC messages from our webview preload
@@ -447,7 +448,8 @@ if (!gotTheLock) {
 
   app.whenReady().then(async () => {
     // Chrome User-Agent for webview session (hides "Electron" from sites like Chrome Web Store)
-    const CHROME_UA = `Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/${process.versions.chrome} Safari/537.36`;
+    const CHROME_VERSION = '131.0.6778.205'; // Override for Chrome Web Store compatibility
+    const CHROME_UA = `Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/${CHROME_VERSION} Safari/537.36`;
     session.fromPartition('persist:kdg').setUserAgent(CHROME_UA);
 
     // CSP: only enforce for our own app shell (defaultSession), NOT for external web pages in webview
