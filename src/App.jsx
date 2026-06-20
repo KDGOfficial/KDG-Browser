@@ -15,7 +15,7 @@ import { Extensions }     from './pages/Extensions';
 import { UpdateOverlay }  from './components/UpdateOverlay';
 import { MigrationWizardOverlay } from './components/MigrationWizardOverlay';
 
-const BROWSER_VERSION = '3.7.8';
+const BROWSER_VERSION = '4.0.0-alpha.1';
 
 export default function App() {
   const electronAPI = window.electronAPI;

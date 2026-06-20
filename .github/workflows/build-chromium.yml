@@ -7,6 +7,9 @@ on:
         description: 'Target to build'
         required: true
         default: 'chrome'
+  push:
+    tags:
+      - 'v4.*'
 
 jobs:
   build-chromium:
@@ -63,3 +66,14 @@ jobs:
         with:
           name: kdg-browser-win64
           path: chromium_src/src/out/Default/mini_installer.exe
+
+      - name: Create GitHub Release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: chromium_src/src/out/Default/mini_installer.exe
+          name: KDG Browser (Chromium Core) Release ${{ github.ref_name }}
+          draft: false
+          prerelease: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

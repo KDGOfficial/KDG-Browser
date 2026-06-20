@@ -1,7 +1,7 @@
 {
   "name": "kdg-browser",
-  "version": "3.7.8",
-  "description": "KDG Browser - Chromium-based browser with AI features for KDG Channel",
+  "version": "4.0.0-alpha.1",
+  "description": "Custom high-performance web browser focused on gaming and custom Web Store extensions",
   "author": "KDG Developer",
   "main": "dist-electron/index.cjs",
   "type": "module",
