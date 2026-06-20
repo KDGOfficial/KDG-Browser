@@ -50,5 +50,15 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.removeAllListeners('download-update');
     ipcRenderer.on('download-update', callback);
   },
-  openDownloadedFile: (filePath: string) => ipcRenderer.invoke('download:openFolder', filePath)
+  openDownloadedFile: (filePath: string) => ipcRenderer.invoke('download:openFolder', filePath),
+
+  // Window Controls
+  minimizeWindow: () => ipcRenderer.send('window:minimize'),
+  maximizeWindow: () => ipcRenderer.send('window:maximize'),
+  closeWindow: () => ipcRenderer.send('window:close'),
+
+  // Extensions API
+  getExtensions: () => ipcRenderer.invoke('extensions:getList'),
+  loadUnpackedExtension: () => ipcRenderer.invoke('extensions:loadUnpacked'),
+  removeExtension: (id: string) => ipcRenderer.invoke('extensions:remove', id)
 });

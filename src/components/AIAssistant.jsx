@@ -214,13 +214,17 @@ export function AIAssistant({ isOpen, onClose, currentVideo, activeTabUrl, getAc
 
         <div className="ai-chat-input-area">
           {selectedImage && (
-            <div className="selected-image-preview" style={{ padding: '6px 10px', background: 'var(--bg-lighter)', borderRadius: '6px', marginBottom: '8px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.8rem', border: '1px solid var(--border-color)' }}>
-              <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                <ImageIcon size={14} color="var(--accent-blue)" /> 
-                {selectedImage.fileName}
+            <div className="selected-image-preview" style={{ padding: '8px', background: 'var(--chrome-input)', borderRadius: 'var(--radius-md)', marginBottom: '8px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.8rem', border: '1px solid var(--chrome-border)' }}>
+              <span style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                <img 
+                  src={`data:${selectedImage.inlineData.mimeType};base64,${selectedImage.inlineData.data}`}
+                  alt="preview"
+                  style={{ width: '32px', height: '32px', borderRadius: '4px', objectFit: 'cover', border: '1px solid var(--chrome-border)' }}
+                />
+                <span style={{ color: 'var(--text-primary)', fontWeight: 500, maxWidth: '180px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{selectedImage.fileName}</span>
               </span>
-              <button onClick={() => setSelectedImage(null)} style={{ background: 'none', border: 'none', color: 'var(--text-dim)', cursor: 'pointer', display: 'flex', alignItems: 'center' }} title="Удалить">
-                <Trash2 size={14} />
+              <button onClick={() => setSelectedImage(null)} style={{ background: 'none', border: 'none', color: 'var(--accent-red)', cursor: 'pointer', display: 'flex', alignItems: 'center', padding: '4px' }} title="Удалить">
+                <X size={16} />
               </button>
             </div>
           )}

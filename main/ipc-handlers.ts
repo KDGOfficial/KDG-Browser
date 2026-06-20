@@ -408,7 +408,9 @@ export function registerIpcHandlers() {
 
       const parts: any[] = [{ text: prompt }];
       if (imagePart) {
-        parts.push(imagePart);
+        parts.push({
+          inlineData: imagePart
+        });
       }
 
       const result = await model.generateContent(parts);

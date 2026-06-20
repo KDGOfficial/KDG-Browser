@@ -8,8 +8,8 @@ export function Extensions() {
   ]);
 
   const fetchExtensions = () => {
-    if (window.electron?.ipcRenderer) {
-      window.electron.ipcRenderer.invoke('extensions:getList').then(exts => {
+    if (window.electronAPI?.getExtensions) {
+      window.electronAPI.getExtensions().then(exts => {
         if (exts) {
           const loaded = exts.map(e => ({
             id: e.id,
@@ -33,8 +33,8 @@ export function Extensions() {
   }, []);
 
   const handleLoadUnpacked = async () => {
-    if (window.electron?.ipcRenderer) {
-      const result = await window.electron.ipcRenderer.invoke('extensions:loadUnpacked');
+    if (window.electronAPI?.loadUnpackedExtension) {
+      const result = await window.electronAPI.loadUnpackedExtension();
       if (result.success) {
         fetchExtensions();
       } else if (result.error && result.error !== 'Canceled') {
@@ -44,8 +44,8 @@ export function Extensions() {
   };
 
   const handleRemove = async (id) => {
-    if (window.electron?.ipcRenderer) {
-      const result = await window.electron.ipcRenderer.invoke('extensions:remove', id);
+    if (window.electronAPI?.removeExtension) {
+      const result = await window.electronAPI.removeExtension(id);
       if (result.success) {
         fetchExtensions();
       } else {

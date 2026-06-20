@@ -177,6 +177,37 @@ app.on('web-contents-created', (event, contents) => {
     });
   }
 
+  // Right-click context menu
+  contents.on('context-menu', (e, params) => {
+    const menuTemplate: any[] = [];
+    
+    if (contents.getType() === 'webview') {
+      menuTemplate.push(
+        { label: 'Назад', enabled: contents.canGoBack(), click: () => contents.goBack() },
+        { label: 'Вперед', enabled: contents.canGoForward(), click: () => contents.goForward() },
+        { label: 'Перезагрузить', click: () => contents.reload() },
+        { type: 'separator' }
+      );
+    }
+    
+    menuTemplate.push(
+      { label: 'Вырезать', role: 'cut', enabled: params.editFlags.canCut },
+      { label: 'Копировать', role: 'copy', enabled: params.editFlags.canCopy },
+      { label: 'Вставить', role: 'paste', enabled: params.editFlags.canPaste },
+      { label: 'Выделить все', role: 'selectAll' }
+    );
+    
+    if (contents.getType() === 'webview' || !app.isPackaged) {
+      menuTemplate.push(
+        { type: 'separator' },
+        { label: 'Исследовать элемент', click: () => contents.openDevTools() }
+      );
+    }
+    
+    const menu = Menu.buildFromTemplate(menuTemplate);
+    menu.popup();
+  });
+
   contents.on('will-attach-webview', (webviewEvent, webPreferences, params) => {
     // Enable standard security permissions on loaded webviews
     webPreferences.preload = path.join(__dirname, 'preload.cjs');
@@ -230,6 +261,23 @@ if (!gotTheLock) {
     };
     setCSP(session.defaultSession);
     setCSP(session.fromPartition('persist:kdg'));
+
+    const setupSessionPermissions = (ses: any) => {
+      ses.setPermissionRequestHandler((webContents: any, permission: string, callback: (granted: boolean) => void) => {
+        const allowed = ['media', 'geolocation', 'notifications', 'midiSysex', 'pointerLock', 'fullscreen', 'openExternal', 'clipboard-read', 'clipboard-sanitized-write'];
+        if (allowed.includes(permission)) {
+          callback(true);
+        } else {
+          callback(false);
+        }
+      });
+
+      ses.setPermissionCheckHandler((webContents: any, permission: string, origin: string, details: any) => {
+        return true;
+      });
+    };
+    setupSessionPermissions(session.defaultSession);
+    setupSessionPermissions(session.fromPartition('persist:kdg'));
   // Register custom protocol 'kdg://'
   if (process.defaultApp) {
     if (process.argv.length >= 2) {

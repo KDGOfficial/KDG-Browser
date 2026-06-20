@@ -90,13 +90,13 @@ export function Header({
     <header className="browser-header">
       {/* ── Window Controls ───────────────────────────── */}
       <div className="window-controls">
-        <button className="window-control-btn" onClick={() => window.electron.ipcRenderer.send('window:minimize')} title="Свернуть">
+        <button className="window-control-btn" onClick={() => window.electronAPI?.minimizeWindow?.()} title="Свернуть">
           <Minus size={14} />
         </button>
-        <button className="window-control-btn" onClick={() => window.electron.ipcRenderer.send('window:maximize')} title="Развернуть">
+        <button className="window-control-btn" onClick={() => window.electronAPI?.maximizeWindow?.()} title="Развернуть">
           <Square size={12} />
         </button>
-        <button className="window-control-btn close" onClick={() => window.electron.ipcRenderer.send('window:close')} title="Закрыть">
+        <button className="window-control-btn close" onClick={() => window.electronAPI?.closeWindow?.()} title="Закрыть">
           <X size={16} />
         </button>
       </div>

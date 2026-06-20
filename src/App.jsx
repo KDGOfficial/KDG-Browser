@@ -15,7 +15,7 @@ import { Extensions }     from './pages/Extensions';
 import { UpdateOverlay }  from './components/UpdateOverlay';
 import { MigrationWizardOverlay } from './components/MigrationWizardOverlay';
 
-const BROWSER_VERSION = '3.6.2';
+const BROWSER_VERSION = '3.6.3';
 
 export default function App() {
   const electronAPI = window.electronAPI;
@@ -284,6 +284,8 @@ export default function App() {
     if (activeTab.url.startsWith('kdg://')) {
       if (activeTab.webviewUrl && activeTab.webviewUrl !== 'about:blank') {
         setTabs(prev => prev.map(t => t.id === activeTabId ? { ...t, url: t.webviewUrl, activeDashboardSection: undefined, activeVideo: undefined } : t));
+      } else if (activeTab.url !== 'kdg://home') {
+        setDashboardSection('home');
       }
       return;
     }
@@ -474,7 +476,7 @@ export default function App() {
   const isBookmarked = bookmarkedUrls.includes(activeTab?.url);
 
   const currentCanGoBack = activeTab?.url.startsWith('kdg://') 
-    ? (activeTab?.webviewUrl && activeTab?.webviewUrl !== 'about:blank') 
+    ? (activeTab?.url !== 'kdg://home' || (activeTab?.webviewUrl && activeTab?.webviewUrl !== 'about:blank')) 
     : activeTab?.canGoBack;
     
   const currentCanGoForward = activeTab?.url.startsWith('kdg://')
@@ -501,7 +503,13 @@ export default function App() {
         isLoading={isLoading}
         isAiOpen={isAiOpen}
         setIsAiOpen={setIsAiOpen}
-        setIsSettingsOpen={() => setDashboardSection('settings')}
+        setIsSettingsOpen={() => {
+          if (activeTab.activeDashboardSection === 'settings') {
+            handleGoBack();
+          } else {
+            setDashboardSection('settings');
+          }
+        }}
         isBookmarked={isBookmarked}
         handleToggleBookmark={handleToggleBookmark}
         isDownloadsOpen={isDownloadsOpen}
@@ -574,6 +582,7 @@ export default function App() {
                       if (bookmarks) setBookmarkedUrls(bookmarks.map(b => b.url));
                     }}
                     onOpenMigrationWizard={() => setShowMigrationWizard(true)}
+                    onClose={handleGoBack}
                   />
                 )}
             </>

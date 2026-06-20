@@ -1,10 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { 
   Settings as SettingsIcon, Globe, Palette, Shield, Sparkles, 
-  Download, RefreshCw, Layers, Cpu, CheckCircle, AlertCircle
+  Download, RefreshCw, Layers, Cpu, CheckCircle, AlertCircle, ArrowLeft
 } from 'lucide-react';
 
-export function Settings({ settings, onSaveSettings, onRefreshBookmarks, onOpenMigrationWizard }) {
+export function Settings({ settings, onSaveSettings, onRefreshBookmarks, onOpenMigrationWizard, onClose }) {
   const electronAPI = window.electronAPI;
   
   const [localSettings, setLocalSettings] = useState({
@@ -174,9 +174,21 @@ export function Settings({ settings, onSaveSettings, onRefreshBookmarks, onOpenM
     <div className="settings-page-container">
       {/* Settings Navigation Sidebar */}
       <div className="settings-nav-sidebar">
-        <div className="settings-nav-title">
-          <SettingsIcon size={16} className="title-icon-spin" />
-          Настройки
+        <div className="settings-nav-title" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingRight: '12px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <SettingsIcon size={16} className="title-icon-spin" />
+            Настройки
+          </div>
+          {onClose && (
+            <button 
+              onClick={onClose} 
+              className="nav-btn" 
+              title="Назад" 
+              style={{ width: '28px', height: '28px', padding: 0, margin: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', transform: 'none' }}
+            >
+              <ArrowLeft size={16} />
+            </button>
+          )}
         </div>
         <div className="settings-nav-list">
           {menuItems.map(item => {

@@ -102,8 +102,8 @@ export function Home({ onNavigateUrl }) {
   
   useEffect(() => {
     // Load links from IPC
-    if (window.electron?.ipcRenderer) {
-      window.electron.ipcRenderer.invoke('settings:get').then(settings => {
+    if (window.electronAPI?.getSettings) {
+      window.electronAPI.getSettings().then(settings => {
         if (settings && settings.quickLinks) {
           setQuickLinks(settings.quickLinks);
         } else {
@@ -117,9 +117,9 @@ export function Home({ onNavigateUrl }) {
 
   const saveQuickLinks = (newLinks) => {
     setQuickLinks(newLinks);
-    if (window.electron?.ipcRenderer) {
-      window.electron.ipcRenderer.invoke('settings:get').then(settings => {
-        window.electron.ipcRenderer.invoke('settings:save', { ...settings, quickLinks: newLinks });
+    if (window.electronAPI?.getSettings && window.electronAPI?.saveSettings) {
+      window.electronAPI.getSettings().then(settings => {
+        window.electronAPI.saveSettings({ ...settings, quickLinks: newLinks });
       });
     }
   };
@@ -127,7 +127,13 @@ export function Home({ onNavigateUrl }) {
   const addQuickLink = () => {
     const url = window.prompt('Введите URL сайта (например, https://example.com):');
     if (!url) return;
-    const name = window.prompt('Введите название (необязательно):') || new URL(url.startsWith('http') ? url : `https://${url}`).hostname;
+    
+    let name = '';
+    try {
+      name = window.prompt('Введите название (необязательно):') || new URL(url.startsWith('http') ? url : `https://${url}`).hostname;
+    } catch {
+      name = url;
+    }
     
     const newLink = {
       id: Date.now().toString(),
