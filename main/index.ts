@@ -1,4 +1,4 @@
-import { app, BrowserWindow, Menu, ipcMain, session, dialog } from 'electron';
+import { app, BrowserWindow, Menu, ipcMain, session, dialog, net } from 'electron';
 import path from 'path';
 import os from 'os';
 import fs from 'fs';
@@ -7,6 +7,96 @@ import { registerIpcHandlers } from './ipc-handlers';
 import { autoUpdater } from 'electron-updater';
 import { ElectronBlocker } from '@cliqz/adblocker-electron';
 import fetch from 'cross-fetch';
+import { pipeline } from 'stream';
+import { promisify } from 'util';
+
+const streamPipeline = promisify(pipeline);
+
+// --- CRX Extension Installer ---
+// Extracts and installs a .crx file (which is a ZIP with a special header)
+async function installCrxExtension(crxBuffer: Buffer, extensionsDir: string, extId: string): Promise<{ success: boolean; name?: string; error?: string }> {
+  try {
+    const AdmZip = require('adm-zip');
+    
+    // CRX3 format: starts with magic bytes "Cr24" followed by version (4 bytes) and header size (4 bytes)
+    // We need to skip the CRX header to get to the ZIP data
+    let zipStart = 0;
+    const magic = crxBuffer.toString('utf8', 0, 4);
+    
+    if (magic === 'Cr24') {
+      // CRX3 format
+      const version = crxBuffer.readUInt32LE(4);
+      if (version === 3) {
+        const headerSize = crxBuffer.readUInt32LE(8);
+        zipStart = 12 + headerSize;
+      } else if (version === 2) {
+        const pubKeyLen = crxBuffer.readUInt32LE(8);
+        const signatureLen = crxBuffer.readUInt32LE(12);
+        zipStart = 16 + pubKeyLen + signatureLen;
+      }
+    } else {
+      // Maybe it's already a ZIP (some extensions are distributed as ZIP)
+      zipStart = 0;
+    }
+    
+    const zipBuffer = crxBuffer.slice(zipStart);
+    const zip = new AdmZip(zipBuffer);
+    
+    // Extract to extensions directory
+    const destPath = path.join(extensionsDir, extId);
+    if (fs.existsSync(destPath)) {
+      fs.rmSync(destPath, { recursive: true, force: true });
+    }
+    fs.mkdirSync(destPath, { recursive: true });
+    zip.extractAllTo(destPath, true);
+    
+    // Read name from manifest
+    let extName = extId;
+    const manifestPath = path.join(destPath, 'manifest.json');
+    if (fs.existsSync(manifestPath)) {
+      try {
+        const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
+        extName = manifest.name || extId;
+      } catch {}
+    }
+    
+    // Load extension in both sessions
+    await session.defaultSession.loadExtension(destPath, { allowFileAccess: true });
+    try {
+      await session.fromPartition('persist:kdg').loadExtension(destPath, { allowFileAccess: true });
+    } catch {}
+    
+    console.log('[Extensions] Installed CRX extension:', extName);
+    return { success: true, name: extName };
+  } catch (error: any) {
+    console.error('[Extensions] Failed to install CRX:', error);
+    return { success: false, error: error.message };
+  }
+}
+
+// Download CRX from Chrome Web Store
+async function downloadCrxFromCWS(extensionId: string): Promise<Buffer | null> {
+  // CWS CRX download URL format
+  const crxUrl = `https://clients2.google.com/service/update2/crx?response=redirect&prodversion=122.0.6261.156&acceptformat=crx2,crx3&x=id%3D${extensionId}%26uc`;
+  
+  try {
+    const response = await fetch(crxUrl, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.6261.156 Safari/537.36'
+      }
+    });
+    
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+    }
+    
+    const arrayBuffer = await response.arrayBuffer();
+    return Buffer.from(arrayBuffer);
+  } catch (error: any) {
+    console.error('[Extensions] Failed to download CRX:', error);
+    return null;
+  }
+}
 
 // This placeholder will be replaced with actual hashes by build-main.js in production build.
 // DO NOT MODIFY THIS LINE MANUALLY.
@@ -382,8 +472,8 @@ if (!gotTheLock) {
         if (dirent.isDirectory()) {
           const extPath = path.join(extensionsDir, dirent.name);
           try {
-            await session.defaultSession.loadExtension(extPath);
-            await session.fromPartition('persist:kdg').loadExtension(extPath);
+            await session.defaultSession.loadExtension(extPath, { allowFileAccess: true });
+            try { await session.fromPartition('persist:kdg').loadExtension(extPath, { allowFileAccess: true }); } catch {}
             console.log('Loaded extension:', dirent.name);
           } catch (e) {
             console.error('Failed to load extension', dirent.name, e);
@@ -396,6 +486,80 @@ if (!gotTheLock) {
   };
 
   await loadExtensions();
+
+  // --- Intercept CRX downloads from Chrome Web Store ---
+  // This allows installing extensions directly from CWS by catching the download intent
+  const handleCwsDownload = async (ses: Electron.Session) => {
+    ses.on('will-download', async (event, item, webContents) => {
+      const url = item.getURL();
+      const mimeType = item.getMimeType();
+      const filename = item.getFilename();
+      
+      // Detect CRX files (Chrome extensions)
+      if (
+        filename.endsWith('.crx') || 
+        mimeType === 'application/x-chrome-extension' ||
+        url.includes('clients2.google.com') && url.includes('crx')
+      ) {
+        event.preventDefault();
+        
+        // Extract extension ID from URL or filename
+        let extId = filename.replace('.crx', '');
+        const idMatch = url.match(/id%3D([a-z]{32})/i) || url.match(/id=([a-z]{32})/i);
+        if (idMatch) extId = idMatch[1];
+        
+        // Notify UI that installation is starting
+        if (mainWindow) {
+          mainWindow.webContents.send('extension:installing', { id: extId, status: 'downloading' });
+        }
+        
+        // Download the CRX ourselves using the direct Google endpoint
+        const crxBuffer = await downloadCrxFromCWS(extId);
+        if (!crxBuffer) {
+          if (mainWindow) mainWindow.webContents.send('extension:installing', { id: extId, status: 'error', error: 'Не удалось скачать расширение' });
+          return;
+        }
+        
+        const result = await installCrxExtension(crxBuffer, extensionsDir, extId);
+        if (mainWindow) {
+          mainWindow.webContents.send('extension:installing', { 
+            id: extId, 
+            status: result.success ? 'installed' : 'error',
+            name: result.name,
+            error: result.error
+          });
+        }
+      }
+    });
+  };
+  
+  handleCwsDownload(session.defaultSession);
+  handleCwsDownload(session.fromPartition('persist:kdg'));
+
+  // --- IPC: Install extension from Chrome Web Store by ID ---
+  ipcMain.handle('extensions:installFromCWS', async (_, extensionId: string) => {
+    if (!extensionId || typeof extensionId !== 'string') {
+      return { success: false, error: 'Неверный ID расширения' };
+    }
+    
+    const cleanId = extensionId.trim().toLowerCase();
+    if (!/^[a-z]{32}$/.test(cleanId)) {
+      return { success: false, error: 'Неверный формат ID расширения (должно быть 32 строчных латинских символа)' };
+    }
+    
+    if (mainWindow) mainWindow.webContents.send('extension:installing', { id: cleanId, status: 'downloading' });
+    
+    const crxBuffer = await downloadCrxFromCWS(cleanId);
+    if (!crxBuffer) {
+      return { success: false, error: 'Не удалось скачать расширение с Chrome Web Store. Проверьте ID расширения и интернет-соединение.' };
+    }
+    
+    const result = await installCrxExtension(crxBuffer, extensionsDir, cleanId);
+    if (mainWindow && result.success) {
+      mainWindow.webContents.send('extension:installing', { id: cleanId, status: 'installed', name: result.name });
+    }
+    return result;
+  });
 
   ipcMain.handle('extensions:loadUnpacked', async () => {
     if (!mainWindow) return { success: false, error: 'No main window' };
@@ -413,10 +577,9 @@ if (!gotTheLock) {
     const destPath = path.join(extensionsDir, extName);
     
     try {
-      // Very basic copy to userData extensions dir
       fs.cpSync(extPath, destPath, { recursive: true });
-      await session.defaultSession.loadExtension(destPath);
-      await session.fromPartition('persist:kdg').loadExtension(destPath);
+      await session.defaultSession.loadExtension(destPath, { allowFileAccess: true });
+      try { await session.fromPartition('persist:kdg').loadExtension(destPath, { allowFileAccess: true }); } catch {}
       return { success: true, name: extName };
     } catch (e: any) {
       return { success: false, error: e.message };
@@ -430,8 +593,13 @@ if (!gotTheLock) {
 
   ipcMain.handle('extensions:remove', async (e, id) => {
     try {
+      // Also remove from disk
+      const extPath = path.join(extensionsDir, id);
       session.defaultSession.removeExtension(id);
-      session.fromPartition('persist:kdg').removeExtension(id);
+      try { session.fromPartition('persist:kdg').removeExtension(id); } catch {}
+      if (fs.existsSync(extPath)) {
+        fs.rmSync(extPath, { recursive: true, force: true });
+      }
       return { success: true };
     } catch (err: any) {
       return { success: false, error: err.message };

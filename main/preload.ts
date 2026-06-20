@@ -60,5 +60,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // Extensions API
   getExtensions: () => ipcRenderer.invoke('extensions:getList'),
   loadUnpackedExtension: () => ipcRenderer.invoke('extensions:loadUnpacked'),
-  removeExtension: (id: string) => ipcRenderer.invoke('extensions:remove', id)
+  removeExtension: (id: string) => ipcRenderer.invoke('extensions:remove', id),
+  installExtensionFromCWS: (extensionId: string) => ipcRenderer.invoke('extensions:installFromCWS', extensionId),
+  onExtensionInstalling: (callback: (event: any, data: any) => void) => {
+    ipcRenderer.removeAllListeners('extension:installing');
+    ipcRenderer.on('extension:installing', callback);
+  }
 });
