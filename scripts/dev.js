@@ -16,7 +16,14 @@ async function compileMain() {
       platform: 'node',
       format: 'cjs',
       outdir: 'dist-electron',
-      external: ['electron', 'better-sqlite3'],
+      external: [
+        'electron', 
+        '@cliqz/adblocker-electron', 
+        'cross-fetch', 
+        'electron-updater',
+        '@google/generative-ai',
+        'better-sqlite3'
+      ],
       sourcemap: 'inline',
       outExtension: { '.js': '.cjs' }
     });
