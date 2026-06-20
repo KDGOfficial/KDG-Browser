@@ -336,20 +336,10 @@ app.on('web-contents-created', (event, contents) => {
     webviewContents.on('did-finish-load', () => {
       const url = webviewContents.getURL();
       if (url.includes('chromewebstore.google.com') || url.includes('chrome.google.com/webstore')) {
-        // Inject additional JS to wire postMessage -> IPC for when preload isn't used
+        // Inject our custom install button and fix the CWS page
         webviewContents.executeJavaScript(`
           (function() {
-            if (!window.__kdgExtListenerSet) {
-              window.__kdgExtListenerSet = true;
-              window.addEventListener('message', function(e) {
-                if (e.data && e.data.type === '__KDG_INSTALL_EXT__' && e.data.extId) {
-                  if (window.ipcRenderer) {
-                    window.ipcRenderer.send('kdg-install-extension', e.data.extId);
-                  }
-                }
-              });
-            }
-            // Ensure chrome.webstore is always present
+            // ── 1. Ensure chrome.webstore exists (for scripts that check it) ──
             if (typeof window.chrome === 'undefined') window.chrome = {};
             if (!window.chrome.webstore) {
               window.chrome.webstore = {
@@ -357,21 +347,68 @@ app.on('web-contents-created', (event, contents) => {
                   var m = (url || location.href).match(/\/([a-z]{32})(?:[/?#]|$)/i);
                   var extId = m ? m[1].toLowerCase() : null;
                   if (extId) {
-                    if (window.ipcRenderer) {
-                      window.ipcRenderer.send('kdg-install-extension', extId);
-                    } else {
-                      window.postMessage({ type: '__KDG_INSTALL_EXT__', extId: extId }, '*');
-                    }
+                    window.__kdgTriggerInstall(extId);
                     if (typeof onSuccess === 'function') setTimeout(onSuccess, 200);
                   } else if (typeof onFailure === 'function') {
-                    onFailure(-1, 'KDG: no extension ID');
+                    onFailure(-1, 'KDG: no ID');
                   }
                 },
                 onInstallStageChanged: { addListener: function(){}, removeListener: function(){}, hasListener: function(){ return false; } },
                 onDownloadProgress: { addListener: function(){}, removeListener: function(){}, hasListener: function(){ return false; } }
               };
             }
-            console.log('[KDG] chrome.webstore available:', !!window.chrome.webstore);
+
+            // ── 2. Extract extension ID from page URL ──
+            var extIdMatch = location.href.match(/\/([a-z]{32})(?:[/?#]|$)/i);
+            var extId = extIdMatch ? extIdMatch[1].toLowerCase() : null;
+
+            // ── 3. IPC trigger function ──
+            window.__kdgTriggerInstall = function(id) {
+              if (window.ipcRenderer) {
+                window.ipcRenderer.send('kdg-install-extension', id || extId);
+              } else {
+                window.postMessage({ type: '__KDG_INSTALL_EXT__', extId: id || extId }, '*');
+              }
+            };
+
+            // ── 4. Inject KDG Install button if not already added ──
+            if (!document.getElementById('kdg-install-btn') && extId) {
+              var style = document.createElement('style');
+              style.textContent = [
+                '#kdg-install-banner { position:fixed; bottom:20px; right:20px; z-index:999999;',
+                '  background:linear-gradient(135deg,#7c3aed,#4f46e5); color:#fff;',
+                '  border-radius:12px; padding:14px 20px; box-shadow:0 8px 32px rgba(79,70,229,.5);',
+                '  display:flex; align-items:center; gap:12px; font-family:sans-serif; font-size:14px; }',
+                '#kdg-install-btn { background:rgba(255,255,255,.2); border:1px solid rgba(255,255,255,.4);',
+                '  color:#fff; padding:8px 16px; border-radius:8px; cursor:pointer; font-size:13px;',
+                '  font-weight:600; transition:all .2s; }',
+                '#kdg-install-btn:hover { background:rgba(255,255,255,.35); transform:scale(1.03); }',
+                '#kdg-install-close { background:none; border:none; color:rgba(255,255,255,.7);',
+                '  cursor:pointer; font-size:18px; line-height:1; padding:0 4px; }'
+              ].join(' ');
+              document.head.appendChild(style);
+
+              var banner = document.createElement('div');
+              banner.id = 'kdg-install-banner';
+              banner.innerHTML = [
+                '<span>🎮 <strong>KDG Browser</strong></span>',
+                '<button id="kdg-install-btn" onclick="window.__kdgTriggerInstall(\'' + extId + '\')" >',
+                '  ⬇ Установить расширение',
+                '</button>',
+                '<button id="kdg-install-close" onclick="this.parentElement.remove()">✕</button>'
+              ].join('');
+              document.body.appendChild(banner);
+            }
+
+            // ── 5. Wire postMessage listener for fallback ──
+            if (!window.__kdgMsgListenerSet) {
+              window.__kdgMsgListenerSet = true;
+              window.addEventListener('message', function(e) {
+                if (e.data && e.data.type === '__KDG_INSTALL_EXT__' && e.data.extId && window.ipcRenderer) {
+                  window.ipcRenderer.send('kdg-install-extension', e.data.extId);
+                }
+              });
+            }
           })();
         `).catch(() => {});
       }
@@ -540,6 +577,9 @@ if (!gotTheLock) {
 
   // Setup Auto Updater
   autoUpdater.autoDownload = false;
+  autoUpdater.allowPrerelease = false;
+  autoUpdater.allowDowngrade = false;
+  autoUpdater.logger = console as any;
 
   // Window Controls IPC
   ipcMain.on('window:minimize', () => {
