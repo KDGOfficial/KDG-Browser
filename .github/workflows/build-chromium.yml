@@ -1,0 +1,65 @@
+name: Build Chromium (KDG Browser)
+
+on:
+  workflow_dispatch:
+    inputs:
+      build_target:
+        description: 'Target to build'
+        required: true
+        default: 'chrome'
+
+jobs:
+  build-chromium:
+    # We use a large runner if available, but fallback to ubuntu-latest.
+    # Note: Compiling Chromium on a standard 2-core GitHub runner will take 12+ hours and may OOM.
+    # We will use swapfile to prevent OOM.
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Setup Depot Tools
+        run: |
+          git clone https://chromium.googlesource.com/chromium/tools/depot_tools.git
+          echo "$PWD/depot_tools" >> $GITHUB_PATH
+          set DEPOT_TOOLS_WIN_TOOLCHAIN=0
+
+      # This step will fetch the Chromium source code. It takes a LONG time and 50GB+ space.
+      - name: Fetch Chromium Source
+        run: |
+          mkdir -p chromium_src
+          cd chromium_src
+          fetch --nohooks chromium
+          cd src
+          # Checkout a specific stable branch for predictability (e.g. 131)
+          git checkout -b kdg_branch refs/tags/131.0.6778.205
+          gclient sync --with_branch_heads -D --force --jobs 16
+
+      - name: Apply KDG Patches
+        run: |
+          cd chromium_src/src
+          node ../../scripts/chromium/patch_brand.js
+          node ../../scripts/chromium/patch_webstore.js
+          node ../../scripts/chromium/inject_react_ui.js
+
+      - name: Configure GN Args
+        run: |
+          cd chromium_src/src
+          gn gen out/Default --args="is_debug=false symbol_level=0 is_component_build=false enable_nacl=false blink_symbol_level=0 v8_symbol_level=0 target_cpu=\"x64\" dcheck_always_on=false is_official_build=true ffmpeg_branding=\"Chrome\" proprietary_codecs=true"
+
+      - name: Compile KDG Browser
+        run: |
+          cd chromium_src/src
+          autoninja -C out/Default chrome
+
+      - name: Upload Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: kdg-browser-win64
+          path: chromium_src/src/out/Default/mini_installer.exe
