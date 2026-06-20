@@ -207,6 +207,9 @@ export function Header({
 
         {/* Right-side actions */}
         <div className="nav-actions">
+          {/* Extension Icons (provided by electron-chrome-extensions) */}
+          <browser-action-list></browser-action-list>
+
           {/* Downloads */}
           <button
             className={`nav-btn ${isDownloadsOpen ? 'active' : ''}`}

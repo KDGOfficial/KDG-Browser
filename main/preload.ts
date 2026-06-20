@@ -1,4 +1,8 @@
 import { contextBridge, ipcRenderer } from 'electron';
+import { injectBrowserAction } from 'electron-chrome-extensions/browser-action';
+
+// Inject the <browser-action-list> web component into the renderer
+injectBrowserAction();
 
 contextBridge.exposeInMainWorld('electronAPI', {
   // Settings API
@@ -61,6 +65,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   getExtensions: () => ipcRenderer.invoke('extensions:getList'),
   loadUnpackedExtension: () => ipcRenderer.invoke('extensions:loadUnpacked'),
   removeExtension: (id: string) => ipcRenderer.invoke('extensions:remove', id),
+  setActiveTab: (webContentsId: number) => ipcRenderer.send('extensions:setActiveTab', webContentsId),
   installExtensionFromCWS: (extensionId: string) => ipcRenderer.invoke('extensions:installFromCWS', extensionId),
   onExtensionInstalling: (callback: (event: any, data: any) => void) => {
     ipcRenderer.removeAllListeners('extension:installing');

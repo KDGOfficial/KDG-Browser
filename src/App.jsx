@@ -65,7 +65,17 @@ export default function App() {
   const activeTabIdRef = useRef(activeTabId);
   useEffect(() => {
     activeTabIdRef.current = activeTabId;
-  }, [activeTabId]);
+    
+    // Notify main process for electron-chrome-extensions
+    setTimeout(() => {
+      const wv = webviewRefs.current[activeTabId];
+      if (wv && wv.getWebContentsId && electronAPI?.setActiveTab) {
+        try {
+          electronAPI.setActiveTab(wv.getWebContentsId());
+        } catch (e) {}
+      }
+    }, 100);
+  }, [activeTabId, electronAPI]);
 
   const activeTab = tabs.find(t => t.id === activeTabId) || tabs[0];
 
