@@ -77,12 +77,13 @@ async function installCrxExtension(crxBuffer: Buffer, extensionsDir: string, ext
 // Download CRX from Chrome Web Store
 async function downloadCrxFromCWS(extensionId: string): Promise<Buffer | null> {
   // CWS CRX download URL format
-  const crxUrl = `https://clients2.google.com/service/update2/crx?response=redirect&prodversion=122.0.6261.156&acceptformat=crx2,crx3&x=id%3D${extensionId}%26uc`;
+  const CHROME_VERSION = '131.0.6778.205';
+  const crxUrl = `https://clients2.google.com/service/update2/crx?response=redirect&prodversion=${CHROME_VERSION}&acceptformat=crx2,crx3&x=id%3D${extensionId}%26uc`;
   
   try {
     const response = await fetch(crxUrl, {
       headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.6261.156 Safari/537.36'
+        'User-Agent': `Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/${CHROME_VERSION} Safari/537.36`
       }
     });
     
@@ -481,6 +482,20 @@ if (!gotTheLock) {
       delete responseHeaders['content-security-policy-report-only'];
       callback({ responseHeaders });
     });
+
+    // Spoof sec-ch-ua headers to bypass Chrome Web Store blocking
+    const applySecChUaSpoofing = (ses: any) => {
+      ses.webRequest.onBeforeSendHeaders((details: any, callback: any) => {
+        details.requestHeaders['User-Agent'] = CHROME_UA;
+        details.requestHeaders['sec-ch-ua'] = '"Google Chrome";v="131", "Chromium";v="131", "Not_A Brand";v="24"';
+        details.requestHeaders['sec-ch-ua-mobile'] = '?0';
+        details.requestHeaders['sec-ch-ua-platform'] = '"Windows"';
+        callback({ requestHeaders: details.requestHeaders });
+      });
+    };
+    
+    applySecChUaSpoofing(session.defaultSession);
+    applySecChUaSpoofing(session.fromPartition('persist:kdg'));
 
     // Inject chrome.webstore compatibility shim on Chrome Web Store pages
     session.fromPartition('persist:kdg').webRequest.onBeforeRequest(
