@@ -184,6 +184,8 @@ button { cursor: pointer; border: none; background: none; }
   display: flex;
   height: 32px;
   -webkit-app-region: no-drag;
+  z-index: 9999;
+  pointer-events: auto;
 }
 .window-control-btn {
   width: 46px;
@@ -196,6 +198,7 @@ button { cursor: pointer; border: none; background: none; }
   color: var(--text-muted);
   cursor: pointer;
   transition: all var(--ease-fast);
+  -webkit-app-region: no-drag;
 }
 .window-control-btn:hover {
   background: var(--chrome-hover);
@@ -216,6 +219,7 @@ button { cursor: pointer; border: none; background: none; }
   overflow-y: hidden;
   -webkit-app-region: drag;
   scrollbar-width: none;
+  margin-right: 140px;
 }
 .tab-strip::-webkit-scrollbar { display: none; }
 
