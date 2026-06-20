@@ -1,4 +1,4 @@
-import { app, BrowserWindow, Menu, ipcMain, session, dialog, net, webContents } from 'electron';
+import { app, BrowserWindow, Menu, ipcMain, session, dialog, net } from 'electron';
 import path from 'path';
 import os from 'os';
 import fs from 'fs';
@@ -9,7 +9,6 @@ import { ElectronBlocker } from '@cliqz/adblocker-electron';
 import fetch from 'cross-fetch';
 import { pipeline } from 'stream';
 import { promisify } from 'util';
-import { ElectronChromeExtensions } from 'electron-chrome-extensions';
 
 const streamPipeline = promisify(pipeline);
 
@@ -99,8 +98,6 @@ async function downloadCrxFromCWS(extensionId: string): Promise<Buffer | null> {
     return null;
   }
 }
-
-// (Removed custom CRX installer in favor of electron-chrome-extensions)
 
 // This placeholder will be replaced with actual hashes by build-main.js in production build.
 // DO NOT MODIFY THIS LINE MANUALLY.
@@ -317,7 +314,7 @@ app.on('web-contents-created', (event, contents) => {
     const CHROME_UA = `Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/${CHROME_VERSION} Safari/537.36`;
     webviewContents.setUserAgent(CHROME_UA);
 
-    // Listen for IPC messages from our webview preload (Deprecated, handled by electron-chrome-extensions)
+    // Listen for IPC messages from our webview preload
     webviewContents.ipc.on('kdg-install-extension', async (ipcEvent, extId: string) => {
       console.log('[Extensions] Install request from CWS webview:', extId);
       const extensionsDir = path.join(app.getPath('userData'), 'Extensions');
@@ -341,14 +338,83 @@ app.on('web-contents-created', (event, contents) => {
     webviewContents.on('did-finish-load', () => {
       const url = webviewContents.getURL();
       if (url.includes('chromewebstore.google.com') || url.includes('chrome.google.com/webstore')) {
-        // No longer injecting custom banner
+        // Inject our custom install button and fix the CWS page
+        webviewContents.executeJavaScript(`
+          (function() {
+            // ── 1. Ensure chrome.webstore exists (for scripts that check it) ──
+            if (typeof window.chrome === 'undefined') window.chrome = {};
+            if (!window.chrome.webstore) {
+              window.chrome.webstore = {
+                install: function(url, onSuccess, onFailure) {
+                  var m = (url || location.href).match(/\/([a-z]{32})(?:[/?#]|$)/i);
+                  var extId = m ? m[1].toLowerCase() : null;
+                  if (extId) {
+                    window.__kdgTriggerInstall(extId);
+                    if (typeof onSuccess === 'function') setTimeout(onSuccess, 200);
+                  } else if (typeof onFailure === 'function') {
+                    onFailure(-1, 'KDG: no ID');
+                  }
+                },
+                onInstallStageChanged: { addListener: function(){}, removeListener: function(){}, hasListener: function(){ return false; } },
+                onDownloadProgress: { addListener: function(){}, removeListener: function(){}, hasListener: function(){ return false; } }
+              };
+            }
+
+            // ── 2. Extract extension ID from page URL ──
+            var extIdMatch = location.href.match(/\/([a-z]{32})(?:[/?#]|$)/i);
+            var extId = extIdMatch ? extIdMatch[1].toLowerCase() : null;
+
+            // ── 3. IPC trigger function ──
+            window.__kdgTriggerInstall = function(id) {
+              if (window.ipcRenderer) {
+                window.ipcRenderer.send('kdg-install-extension', id || extId);
+              } else {
+                window.postMessage({ type: '__KDG_INSTALL_EXT__', extId: id || extId }, '*');
+              }
+            };
+
+            // ── 4. Inject KDG Install button if not already added ──
+            if (!document.getElementById('kdg-install-btn') && extId) {
+              var style = document.createElement('style');
+              style.textContent = [
+                '#kdg-install-banner { position:fixed; bottom:20px; right:20px; z-index:999999;',
+                '  background:linear-gradient(135deg,#7c3aed,#4f46e5); color:#fff;',
+                '  border-radius:12px; padding:14px 20px; box-shadow:0 8px 32px rgba(79,70,229,.5);',
+                '  display:flex; align-items:center; gap:12px; font-family:sans-serif; font-size:14px; }',
+                '#kdg-install-btn { background:rgba(255,255,255,.2); border:1px solid rgba(255,255,255,.4);',
+                '  color:#fff; padding:8px 16px; border-radius:8px; cursor:pointer; font-size:13px;',
+                '  font-weight:600; transition:all .2s; }',
+                '#kdg-install-btn:hover { background:rgba(255,255,255,.35); transform:scale(1.03); }',
+                '#kdg-install-close { background:none; border:none; color:rgba(255,255,255,.7);',
+                '  cursor:pointer; font-size:18px; line-height:1; padding:0 4px; }'
+              ].join(' ');
+              document.head.appendChild(style);
+
+              var banner = document.createElement('div');
+              banner.id = 'kdg-install-banner';
+              banner.innerHTML = [
+                '<span>🎮 <strong>KDG Browser</strong></span>',
+                '<button id="kdg-install-btn" onclick="window.__kdgTriggerInstall(\'' + extId + '\')" >',
+                '  ⬇ Установить расширение',
+                '</button>',
+                '<button id="kdg-install-close" onclick="this.parentElement.remove()">✕</button>'
+              ].join('');
+              document.body.appendChild(banner);
+            }
+
+            // ── 5. Wire postMessage listener for fallback ──
+            if (!window.__kdgMsgListenerSet) {
+              window.__kdgMsgListenerSet = true;
+              window.addEventListener('message', function(e) {
+                if (e.data && e.data.type === '__KDG_INSTALL_EXT__' && e.data.extId && window.ipcRenderer) {
+                  window.ipcRenderer.send('kdg-install-extension', e.data.extId);
+                }
+              });
+            }
+          })();
+        `).catch(() => {});
       }
     });
-
-    // Register this webview as a Chrome Extension tab
-    if ((global as any).chromeExtensions) {
-      (global as any).chromeExtensions.addTab(webviewContents, mainWindow);
-    }
   });
 
   // Block non-HTTPS, non-kdg protocol redirects and navigations
@@ -382,34 +448,6 @@ if (!gotTheLock) {
   });
 
   app.whenReady().then(async () => {
-    // Initialize electron-chrome-extensions
-    const kdgSession = session.fromPartition('persist:kdg');
-    
-    // We export this so we can access it from ipcHandlers if needed
-    (global as any).chromeExtensions = new ElectronChromeExtensions({
-      license: 'GPL-3.0',
-      session: kdgSession,
-      createTab: async (details: any) => {
-        if (mainWindow) {
-          mainWindow.webContents.send('extensions:createTab', details);
-        }
-        return { id: Math.floor(Math.random() * 10000) } as any; // Temporary stub, real ID updated later
-      },
-      selectTab: async (tab: any) => {
-        if (mainWindow) {
-          mainWindow.webContents.send('extensions:selectTab', tab.id);
-        }
-      },
-      removeTab: async (tab: any) => {
-        if (mainWindow) {
-          mainWindow.webContents.send('extensions:removeTab', tab.id);
-        }
-      }
-    });
-
-    // Handle CRX protocol for extensions
-    ElectronChromeExtensions.handleCRXProtocol(session.defaultSession);
-    
     // Chrome User-Agent for webview session (hides "Electron" from sites like Chrome Web Store)
     const CHROME_VERSION = '131.0.6778.205'; // Override for Chrome Web Store compatibility
     const CHROME_UA = `Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/${CHROME_VERSION} Safari/537.36`;
@@ -582,6 +620,28 @@ if (!gotTheLock) {
     fs.mkdirSync(extensionsDir, { recursive: true });
   }
 
+  const loadExtensions = async () => {
+    try {
+      const dirs = fs.readdirSync(extensionsDir, { withFileTypes: true });
+      for (const dirent of dirs) {
+        if (dirent.isDirectory()) {
+          const extPath = path.join(extensionsDir, dirent.name);
+          try {
+            await session.defaultSession.loadExtension(extPath, { allowFileAccess: true });
+            try { await session.fromPartition('persist:kdg').loadExtension(extPath, { allowFileAccess: true }); } catch {}
+            console.log('Loaded extension:', dirent.name);
+          } catch (e) {
+            console.error('Failed to load extension', dirent.name, e);
+          }
+        }
+      }
+    } catch (e) {
+      console.error('Failed to read extensions directory', e);
+    }
+  };
+
+  await loadExtensions();
+
   // --- Intercept CRX downloads from Chrome Web Store ---
   // This allows installing extensions directly from CWS by catching the download intent
   const handleCwsDownload = async (ses: Electron.Session) => {
@@ -630,17 +690,6 @@ if (!gotTheLock) {
   
   handleCwsDownload(session.defaultSession);
   handleCwsDownload(session.fromPartition('persist:kdg'));
-
-  ipcMain.on('extensions:setActiveTab', (event, webContentsId: number) => {
-    try {
-      const wc = webContents.fromId(webContentsId);
-      if (wc && (global as any).chromeExtensions) {
-        (global as any).chromeExtensions.selectTab(wc);
-      }
-    } catch (e) {
-      console.error('Failed to set active tab for extensions', e);
-    }
-  });
 
   // --- IPC: Install extension from Chrome Web Store by ID ---
   ipcMain.handle('extensions:installFromCWS', async (_, extensionId: string) => {
