@@ -22,6 +22,9 @@ jobs:
           node-version: '20' # Требуемая версия Node
           cache: 'npm'
 
+      - name: Setup MSVC
+        uses: ilammy/msvc-dev-cmd@v1
+
       - name: Install Dependencies
         run: npm ci
 
