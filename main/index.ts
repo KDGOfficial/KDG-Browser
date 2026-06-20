@@ -299,12 +299,83 @@ app.on('web-contents-created', (event, contents) => {
   });
 
   contents.on('will-attach-webview', (webviewEvent, webPreferences, params) => {
-    // Enable standard security permissions on loaded webviews
-    webPreferences.preload = path.join(__dirname, 'preload.cjs');
+    // Use our webview-specific preload (injects chrome.webstore before page loads)
+    webPreferences.preload = path.join(__dirname, 'webview-preload.cjs');
     webPreferences.nodeIntegration = false;
-    webPreferences.contextIsolation = true;
-    webPreferences.sandbox = true;
+    webPreferences.contextIsolation = false; // Must be false for preload to access window directly on CWS
+    webPreferences.sandbox = false; // Must be false to allow preload
     webPreferences.webSecurity = true;
+  });
+
+  // Handle webview after it's attached
+  contents.on('did-attach-webview', (attachEvent, webviewContents) => {
+    const CHROME_UA = `Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/${process.versions.chrome} Safari/537.36`;
+    webviewContents.setUserAgent(CHROME_UA);
+
+    // Listen for IPC messages from our webview preload
+    webviewContents.ipc.on('kdg-install-extension', async (ipcEvent, extId: string) => {
+      console.log('[Extensions] Install request from CWS webview:', extId);
+      const extensionsDir = path.join(app.getPath('userData'), 'Extensions');
+      if (mainWindow) mainWindow.webContents.send('extension:installing', { id: extId, status: 'downloading' });
+      const crxBuffer = await downloadCrxFromCWS(extId);
+      if (!crxBuffer) {
+        if (mainWindow) mainWindow.webContents.send('extension:installing', { id: extId, status: 'error', error: 'Не удалось скачать расширение' });
+        return;
+      }
+      const result = await installCrxExtension(crxBuffer, extensionsDir, extId);
+      if (mainWindow) {
+        mainWindow.webContents.send('extension:installing', {
+          id: extId,
+          status: result.success ? 'installed' : 'error',
+          name: result.name,
+          error: result.error
+        });
+      }
+    });
+
+    webviewContents.on('did-finish-load', () => {
+      const url = webviewContents.getURL();
+      if (url.includes('chromewebstore.google.com') || url.includes('chrome.google.com/webstore')) {
+        // Inject additional JS to wire postMessage -> IPC for when preload isn't used
+        webviewContents.executeJavaScript(`
+          (function() {
+            if (!window.__kdgExtListenerSet) {
+              window.__kdgExtListenerSet = true;
+              window.addEventListener('message', function(e) {
+                if (e.data && e.data.type === '__KDG_INSTALL_EXT__' && e.data.extId) {
+                  if (window.ipcRenderer) {
+                    window.ipcRenderer.send('kdg-install-extension', e.data.extId);
+                  }
+                }
+              });
+            }
+            // Ensure chrome.webstore is always present
+            if (typeof window.chrome === 'undefined') window.chrome = {};
+            if (!window.chrome.webstore) {
+              window.chrome.webstore = {
+                install: function(url, onSuccess, onFailure) {
+                  var m = (url || location.href).match(/\/([a-z]{32})(?:[/?#]|$)/i);
+                  var extId = m ? m[1].toLowerCase() : null;
+                  if (extId) {
+                    if (window.ipcRenderer) {
+                      window.ipcRenderer.send('kdg-install-extension', extId);
+                    } else {
+                      window.postMessage({ type: '__KDG_INSTALL_EXT__', extId: extId }, '*');
+                    }
+                    if (typeof onSuccess === 'function') setTimeout(onSuccess, 200);
+                  } else if (typeof onFailure === 'function') {
+                    onFailure(-1, 'KDG: no extension ID');
+                  }
+                },
+                onInstallStageChanged: { addListener: function(){}, removeListener: function(){}, hasListener: function(){ return false; } },
+                onDownloadProgress: { addListener: function(){}, removeListener: function(){}, hasListener: function(){ return false; } }
+              };
+            }
+            console.log('[KDG] chrome.webstore available:', !!window.chrome.webstore);
+          })();
+        `).catch(() => {});
+      }
+    });
   });
 
   // Block non-HTTPS, non-kdg protocol redirects and navigations
@@ -338,19 +409,46 @@ if (!gotTheLock) {
   });
 
   app.whenReady().then(async () => {
-    // Enforce Content Security Policy headers for all network requests
-    const setCSP = (ses: any) => {
-      ses.webRequest.onHeadersReceived((details: any, callback: any) => {
+    // Chrome User-Agent for webview session (hides "Electron" from sites like Chrome Web Store)
+    const CHROME_UA = `Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/${process.versions.chrome} Safari/537.36`;
+    session.fromPartition('persist:kdg').setUserAgent(CHROME_UA);
+
+    // CSP: only enforce for our own app shell (defaultSession), NOT for external web pages in webview
+    // Overriding CSP for external sites breaks them (especially Chrome Web Store)
+    session.defaultSession.webRequest.onHeadersReceived((details: any, callback: any) => {
+      // Only apply CSP to our own pages, not external URLs
+      const url = details.url || '';
+      if (url.startsWith('http://localhost') || url.startsWith('kdg://') || url.startsWith('file://')) {
         callback({
           responseHeaders: {
             ...details.responseHeaders,
             'Content-Security-Policy': ["default-src 'self' 'unsafe-inline' 'unsafe-eval' https: wss: kdg:; object-src 'none'"]
           }
         });
-      });
-    };
-    setCSP(session.defaultSession);
-    setCSP(session.fromPartition('persist:kdg'));
+      } else {
+        callback({ responseHeaders: details.responseHeaders });
+      }
+    });
+
+    // For webview session: strip X-Frame-Options and CSP to allow sites to load,
+    // and inject chrome.webstore stub on Chrome Web Store pages
+    session.fromPartition('persist:kdg').webRequest.onHeadersReceived((details: any, callback: any) => {
+      const responseHeaders = { ...details.responseHeaders };
+      // Remove headers that can block content in webview
+      delete responseHeaders['x-frame-options'];
+      delete responseHeaders['X-Frame-Options'];
+      delete responseHeaders['content-security-policy'];
+      delete responseHeaders['Content-Security-Policy'];
+      delete responseHeaders['content-security-policy-report-only'];
+      callback({ responseHeaders });
+    });
+
+    // Inject chrome.webstore compatibility shim on Chrome Web Store pages
+    session.fromPartition('persist:kdg').webRequest.onBeforeRequest(
+      { urls: ['https://chromewebstore.google.com/*', 'https://chrome.google.com/webstore/*'] },
+      (details, callback) => { callback({}); }
+    );
+
 
     const setupSessionPermissions = (ses: any) => {
       ses.setPermissionRequestHandler((webContents: any, permission: string, callback: (granted: boolean) => void) => {

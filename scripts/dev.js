@@ -10,7 +10,8 @@ async function compileMain() {
       entryPoints: [
         'main/index.ts',
         'main/preload.ts',
-        'main/ipc-handlers.ts'
+        'main/ipc-handlers.ts',
+        'main/webview-preload.ts'
       ],
       bundle: true,
       platform: 'node',
@@ -22,7 +23,8 @@ async function compileMain() {
         'cross-fetch', 
         'electron-updater',
         '@google/generative-ai',
-        'better-sqlite3'
+        'better-sqlite3',
+        'adm-zip'
       ],
       sourcemap: 'inline',
       outExtension: { '.js': '.cjs' }
