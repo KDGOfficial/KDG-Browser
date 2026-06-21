@@ -3,12 +3,8 @@ name: Release KDG Browser
 on:
   push:
     tags:
-      - 'v*'   # Trigger on any version tag, e.g. v4.0.0-alpha.6
+      - 'v*'
   workflow_dispatch:
-    inputs:
-      tag:
-        description: 'Tag to build and release (e.g. v4.0.0-alpha.6)'
-        required: false
 
 jobs:
   build:
@@ -26,21 +22,11 @@ jobs:
           node-version: '20'
           cache: 'npm'
 
-      - name: Setup MSVC (required for better-sqlite3 native build)
+      - name: Setup MSVC (for better-sqlite3 native build)
         uses: ilammy/msvc-dev-cmd@v1
-
-      - name: Install Python (required for node-gyp)
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.11'
 
       - name: Install Dependencies
         run: npm ci
-
-      - name: Rebuild native modules for Electron
-        run: npx electron-rebuild -f -w better-sqlite3
-        env:
-          npm_config_msvs_version: '2022'
 
       - name: Build and Publish to GitHub Releases
         run: npm run publish:win
@@ -48,3 +34,4 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           CSC_IDENTITY_AUTO_DISCOVERY: false
+          npm_config_msvs_version: '2022'

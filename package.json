@@ -1,6 +1,6 @@
 {
   "name": "kdg-browser",
-  "version": "4.0.0-alpha.7",
+  "version": "4.0.0-alpha.8",
   "description": "Custom high-performance web browser focused on gaming and custom Web Store extensions",
   "author": "KDG Developer",
   "main": "dist-electron/index.cjs",
@@ -30,7 +30,6 @@
     "@vitejs/plugin-react": "^4.2.1",
     "electron": "^29.1.0",
     "electron-builder": "^24.13.3",
-    "electron-rebuild": "^3.2.9",
     "esbuild": "^0.20.1",
     "javascript-obfuscator": "^5.4.3",
     "terser": "^5.48.0",
