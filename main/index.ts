@@ -476,25 +476,6 @@ if (!gotTheLock) {
         headers['sec-ch-ua-mobile'] = '?0';
         headers['sec-ch-ua-platform'] = '"Windows"';
 
-        // Figma reload loop fix:
-        // Figma detects webview/iframe by checking Sec-Fetch-Dest and Sec-Fetch-Site.
-        // When Sec-Fetch-Dest is "iframe" or Sec-Fetch-Site is "cross-site" for main
-        // navigation, Figma forces a redirect to its desktop app or reloads.
-        // Spoof these headers for Figma requests to make it think it's a top-level navigation.
-        const url = details.url || '';
-        if (url.includes('figma.com')) {
-          removeHeader('sec-fetch-dest');
-          removeHeader('sec-fetch-site');
-          removeHeader('sec-fetch-mode');
-          removeHeader('sec-fetch-user');
-          headers['Sec-Fetch-Dest'] = 'document';
-          headers['Sec-Fetch-Site'] = 'none';
-          headers['Sec-Fetch-Mode'] = 'navigate';
-          headers['Sec-Fetch-User'] = '?1';
-          // Remove Origin header that reveals we're not a top-level browser context
-          removeHeader('origin');
-        }
-
         callback({ requestHeaders: headers });
       });
     };

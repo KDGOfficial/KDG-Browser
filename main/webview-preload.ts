@@ -8,6 +8,82 @@ import { ipcRenderer, webFrame } from 'electron';
   const hostname = location.hostname;
   const isCWS = hostname.includes('chromewebstore.google.com') || hostname.includes('chrome.google.com');
 
+  const CHROME_VERSION = '131';
+  const CHROME_VERSION_FULL = '131.0.6778.205';
+
+  // ── Universal spoof: runs for ALL pages ──────────────────────────────────
+  // Electron does NOT spoof navigator.userAgentData even when you set a custom
+  // User-Agent string. Sites like Figma check userAgentData.brands and see
+  // "Chromium" (without "Google Chrome"), causing them to reject the browser.
+  // We must inject this override into the Main World before page scripts run.
+  webFrame.executeJavaScript(`
+    (function () {
+      var CHROME_VER = '${CHROME_VERSION}';
+      var CHROME_VER_FULL = '${CHROME_VERSION_FULL}';
+
+      var brands = [
+        { brand: 'Not_A Brand',    version: '24' },
+        { brand: 'Chromium',       version: CHROME_VER },
+        { brand: 'Google Chrome',  version: CHROME_VER }
+      ];
+      var fullVersionList = [
+        { brand: 'Not_A Brand',    version: '24.0.0.0' },
+        { brand: 'Chromium',       version: CHROME_VER_FULL },
+        { brand: 'Google Chrome',  version: CHROME_VER_FULL }
+      ];
+      var highEntropyData = {
+        brands: brands,
+        fullVersionList: fullVersionList,
+        mobile: false,
+        platform: 'Windows',
+        uaFullVersion: CHROME_VER_FULL,
+        architecture: 'x86',
+        bitness: '64',
+        model: '',
+        platformVersion: '10.0.0',
+        wow64: false
+      };
+
+      var uaDataObject = {
+        brands: brands,
+        mobile: false,
+        platform: 'Windows',
+        getHighEntropyValues: function(hints) {
+          return Promise.resolve(highEntropyData);
+        },
+        toJSON: function() {
+          return { brands: brands, mobile: false, platform: 'Windows' };
+        }
+      };
+
+      try {
+        Object.defineProperty(navigator, 'userAgentData', {
+          get: function() { return uaDataObject; },
+          configurable: true,
+          enumerable: true
+        });
+      } catch(e) {}
+
+      // Ensure navigator.webdriver is false (some bot-detection checks this)
+      try {
+        Object.defineProperty(navigator, 'webdriver', {
+          get: function() { return false; },
+          configurable: true
+        });
+      } catch(e) {}
+
+      // Ensure vendor is correct
+      try {
+        Object.defineProperty(navigator, 'vendor', {
+          get: function() { return 'Google Inc.'; },
+          configurable: true
+        });
+      } catch(e) {}
+
+    })();
+  `).catch(function() {});
+
+  // ── CWS-only: chrome.webstore API shim ───────────────────────────────────
   if (!isCWS) return;
 
   // Listen for installation requests from the injected script
@@ -19,25 +95,11 @@ import { ipcRenderer, webFrame } from 'electron';
     }
   });
 
-  // Execute the shim directly in the Main World so CWS scripts can access it
+  // Execute the CWS shim in the Main World
   webFrame.executeJavaScript(`
     (function () {
-      // Spoof userAgentData so CWS thinks we are Google Chrome 131
-      Object.defineProperty(navigator, 'userAgentData', {
-        get: () => ({
-          brands: [
-            { brand: 'Google Chrome', version: '131' },
-            { brand: 'Chromium', version: '131' },
-            { brand: 'Not_A Brand', version: '24' }
-          ],
-          mobile: false,
-          platform: 'Windows'
-        }),
-        configurable: true
-      });
-
       function extractExtId(url) {
-        const match = (url || location.href).match(/\\/([a-z]{32})(?:[/?#]|$)/i);
+        var match = (url || location.href).match(/\\/([a-z]{32})(?:[/?#]|$)/i);
         return match ? match[1].toLowerCase() : null;
       }
 
@@ -45,12 +107,12 @@ import { ipcRenderer, webFrame } from 'electron';
       if (typeof window.chrome === 'undefined') {
         window.chrome = {};
       }
-      const chrome = window.chrome;
+      var chrome = window.chrome;
 
       // Inject chrome.webstore and chrome.webstorePrivate
       chrome.webstore = {
         install: function (url, onSuccess, onFailure) {
-          const extId = extractExtId(url);
+          var extId = extractExtId(url);
           if (extId) {
             window.dispatchEvent(new CustomEvent('kdg-install-extension', { detail: extId }));
             if (typeof onSuccess === 'function') setTimeout(onSuccess, 300);
@@ -59,7 +121,7 @@ import { ipcRenderer, webFrame } from 'electron';
           }
         },
         onInstallStageChanged: { addListener: function () {}, removeListener: function () {}, hasListener: function () { return false; }, hasListeners: function () { return false; } },
-        onDownloadProgress: { addListener: function () {}, removeListener: function () {}, hasListener: function () { return false; }, hasListeners: function () { return false; } }
+        onDownloadProgress:    { addListener: function () {}, removeListener: function () {}, hasListener: function () { return false; }, hasListeners: function () { return false; } }
       };
 
       chrome.webstorePrivate = {
@@ -67,7 +129,7 @@ import { ipcRenderer, webFrame } from 'electron';
           if (typeof cb === 'function') cb('installable');
         },
         beginInstallWithManifest3: function(details, cb) {
-          const id = details.id || extractExtId(location.href);
+          var id = details.id || extractExtId(location.href);
           if (id) {
             window.dispatchEvent(new CustomEvent('kdg-install-extension', { detail: id }));
           }
@@ -96,7 +158,7 @@ import { ipcRenderer, webFrame } from 'electron';
         };
       }
 
-      // Stub chrome.management (used by CWS to check if extension is already installed)
+      // Stub chrome.management
       if (!chrome.management) {
         chrome.management = {
           get: function (id, cb) {

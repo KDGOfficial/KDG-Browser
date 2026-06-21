@@ -1,6 +1,6 @@
 {
   "name": "kdg-browser",
-  "version": "4.0.0-alpha.5",
+  "version": "4.0.0-alpha.6",
   "description": "Custom high-performance web browser focused on gaming and custom Web Store extensions",
   "author": "KDG Developer",
   "main": "dist-electron/index.cjs",
