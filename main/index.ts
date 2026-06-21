@@ -585,8 +585,9 @@ if (!gotTheLock) {
 
   // Setup Auto Updater
   autoUpdater.autoDownload = false;
-  autoUpdater.allowPrerelease = false;
+  autoUpdater.allowPrerelease = true;  // Include alpha/beta releases
   autoUpdater.allowDowngrade = false;
+  autoUpdater.channel = 'alpha';       // Match electron-builder publish channel
   autoUpdater.logger = console as any;
 
   // Window Controls IPC
