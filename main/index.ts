@@ -306,8 +306,8 @@ app.on('web-contents-created', (event, contents) => {
     // Use our webview-specific preload (injects chrome.webstore before page loads)
     webPreferences.preload = path.join(__dirname, 'webview-preload.cjs');
     webPreferences.nodeIntegration = false;
-    webPreferences.contextIsolation = false; // Must be false for preload to access window directly on CWS
-    webPreferences.sandbox = false; // Must be false to allow preload
+    webPreferences.contextIsolation = true; 
+    webPreferences.sandbox = true; 
     webPreferences.webSecurity = true;
   });
 
