@@ -351,16 +351,13 @@ app.on('web-contents-created', (event, contents) => {
     }
   });
 
-  // Block non-HTTPS, non-kdg protocol redirects and navigations
+  // Block dangerous protocol navigations but allow http: (will redirect to https) and blob:
   contents.on('will-navigate', (navEvent, url) => {
     try {
       const parsedUrl = new URL(url);
-      if (
-        parsedUrl.protocol !== 'https:' && 
-        parsedUrl.protocol !== 'kdg:' && 
-        parsedUrl.hostname !== 'localhost' && 
-        parsedUrl.hostname !== '127.0.0.1'
-      ) {
+      const allowed = ['https:', 'http:', 'kdg:', 'blob:', 'data:'];
+      const isLocalhost = parsedUrl.hostname === 'localhost' || parsedUrl.hostname === '127.0.0.1';
+      if (!allowed.includes(parsedUrl.protocol) && !isLocalhost) {
         navEvent.preventDefault();
       }
     } catch {
@@ -433,7 +430,7 @@ if (!gotTheLock) {
     });
 
     // For webview session: strip X-Frame-Options and CSP to allow sites to load,
-    // and inject chrome.webstore stub on Chrome Web Store pages
+    // and inject chrome.webstore compatibility shim on Chrome Web Store pages
     session.fromPartition('persist:kdg').webRequest.onHeadersReceived((details: any, callback: any) => {
       const responseHeaders = { ...details.responseHeaders };
       // Remove headers that can block content in webview
@@ -442,10 +439,19 @@ if (!gotTheLock) {
       delete responseHeaders['content-security-policy'];
       delete responseHeaders['Content-Security-Policy'];
       delete responseHeaders['content-security-policy-report-only'];
+      // Figma: allow cross-origin-opener-policy to be relaxed so its auth flow doesn't fail
+      const url = details.url || '';
+      if (url.includes('figma.com')) {
+        delete responseHeaders['cross-origin-opener-policy'];
+        delete responseHeaders['Cross-Origin-Opener-Policy'];
+        delete responseHeaders['cross-origin-embedder-policy'];
+        delete responseHeaders['Cross-Origin-Embedder-Policy'];
+      }
       callback({ responseHeaders });
     });
 
     // Spoof sec-ch-ua headers to bypass Chrome Web Store blocking
+    // Also fix Figma reload loop by spoofing Sec-Fetch-* headers
     const applySecChUaSpoofing = (ses: any) => {
       ses.webRequest.onBeforeSendHeaders((details: any, callback: any) => {
         const headers = details.requestHeaders;
@@ -470,6 +476,25 @@ if (!gotTheLock) {
         headers['sec-ch-ua-mobile'] = '?0';
         headers['sec-ch-ua-platform'] = '"Windows"';
 
+        // Figma reload loop fix:
+        // Figma detects webview/iframe by checking Sec-Fetch-Dest and Sec-Fetch-Site.
+        // When Sec-Fetch-Dest is "iframe" or Sec-Fetch-Site is "cross-site" for main
+        // navigation, Figma forces a redirect to its desktop app or reloads.
+        // Spoof these headers for Figma requests to make it think it's a top-level navigation.
+        const url = details.url || '';
+        if (url.includes('figma.com')) {
+          removeHeader('sec-fetch-dest');
+          removeHeader('sec-fetch-site');
+          removeHeader('sec-fetch-mode');
+          removeHeader('sec-fetch-user');
+          headers['Sec-Fetch-Dest'] = 'document';
+          headers['Sec-Fetch-Site'] = 'none';
+          headers['Sec-Fetch-Mode'] = 'navigate';
+          headers['Sec-Fetch-User'] = '?1';
+          // Remove Origin header that reveals we're not a top-level browser context
+          removeHeader('origin');
+        }
+
         callback({ requestHeaders: headers });
       });
     };
@@ -486,7 +511,12 @@ if (!gotTheLock) {
 
     const setupSessionPermissions = (ses: any) => {
       ses.setPermissionRequestHandler((webContents: any, permission: string, callback: (granted: boolean) => void) => {
-        const allowed = ['media', 'geolocation', 'notifications', 'midiSysex', 'pointerLock', 'fullscreen', 'openExternal', 'clipboard-read', 'clipboard-sanitized-write'];
+        // Allow all permissions needed by modern web apps including Figma
+        const allowed = [
+          'media', 'geolocation', 'notifications', 'midiSysex', 'pointerLock',
+          'fullscreen', 'openExternal', 'clipboard-read', 'clipboard-sanitized-write',
+          'storage-access', 'window-management', 'idle-detection'
+        ];
         if (allowed.includes(permission)) {
           callback(true);
         } else {

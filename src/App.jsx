@@ -15,7 +15,7 @@ import { Extensions }     from './pages/Extensions';
 import { UpdateOverlay }  from './components/UpdateOverlay';
 import { MigrationWizardOverlay } from './components/MigrationWizardOverlay';
 
-const BROWSER_VERSION = '4.0.0-alpha.4';
+const BROWSER_VERSION = '4.0.0-alpha.5';
 
 export default function App() {
   const electronAPI = window.electronAPI;
@@ -424,8 +424,14 @@ export default function App() {
     el.addEventListener('did-navigate', (e) => {
       setTabs(prev => prev.map(t => {
         if (t.id !== id) return t;
-        if (e.url === 'about:blank' || e.url === 'chrome-error://chromewebdata/') {
+        // Only redirect to home on about:blank; don't redirect on chrome-error during
+        // intermediate auth redirects (e.g. Figma OAuth flow) to avoid reload loop
+        if (e.url === 'about:blank') {
           return { ...t, url: 'kdg://home', webviewUrl: 'about:blank', canGoBack: false };
+        }
+        if (e.url === 'chrome-error://chromewebdata/') {
+          // Keep the current URL, just mark as errored — don't redirect to home
+          return { ...t, canGoBack: el.canGoBack(), canGoForward: el.canGoForward() };
         }
         if (t.url.startsWith('kdg://')) {
           return { ...t, webviewUrl: e.url, canGoBack: el.canGoBack(), canGoForward: el.canGoForward() };
@@ -440,8 +446,11 @@ export default function App() {
     el.addEventListener('did-navigate-in-page', (e) => {
       setTabs(prev => prev.map(t => {
         if (t.id !== id) return t;
-        if (e.url === 'about:blank' || e.url === 'chrome-error://chromewebdata/') {
+        if (e.url === 'about:blank') {
           return { ...t, url: 'kdg://home', webviewUrl: 'about:blank', canGoBack: false };
+        }
+        if (e.url === 'chrome-error://chromewebdata/') {
+          return { ...t, canGoBack: el.canGoBack(), canGoForward: el.canGoForward() };
         }
         if (t.url.startsWith('kdg://')) {
           return { ...t, webviewUrl: e.url, canGoBack: el.canGoBack(), canGoForward: el.canGoForward() };
