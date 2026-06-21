@@ -8,9 +8,6 @@ import { ipcRenderer } from 'electron';
   const hostname = location.hostname;
   const isCWS = hostname.includes('chromewebstore.google.com') || hostname.includes('chrome.google.com');
 
-  // Expose ipcRenderer for the did-finish-load injection script
-  (window as any).ipcRenderer = ipcRenderer;
-
   if (!isCWS) return;
 
   // --- Chrome Web Store compatibility shim ---

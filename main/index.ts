@@ -448,11 +448,29 @@ if (!gotTheLock) {
     // Spoof sec-ch-ua headers to bypass Chrome Web Store blocking
     const applySecChUaSpoofing = (ses: any) => {
       ses.webRequest.onBeforeSendHeaders((details: any, callback: any) => {
-        details.requestHeaders['User-Agent'] = CHROME_UA;
-        details.requestHeaders['sec-ch-ua'] = '"Google Chrome";v="131", "Chromium";v="131", "Not_A Brand";v="24"';
-        details.requestHeaders['sec-ch-ua-mobile'] = '?0';
-        details.requestHeaders['sec-ch-ua-platform'] = '"Windows"';
-        callback({ requestHeaders: details.requestHeaders });
+        const headers = details.requestHeaders;
+        
+        // Helper to remove header case-insensitively to prevent duplicates
+        const removeHeader = (name: string) => {
+          const lowerName = name.toLowerCase();
+          for (const key of Object.keys(headers)) {
+            if (key.toLowerCase() === lowerName) {
+              delete headers[key];
+            }
+          }
+        };
+
+        removeHeader('user-agent');
+        removeHeader('sec-ch-ua');
+        removeHeader('sec-ch-ua-mobile');
+        removeHeader('sec-ch-ua-platform');
+
+        headers['User-Agent'] = CHROME_UA;
+        headers['sec-ch-ua'] = '"Google Chrome";v="131", "Chromium";v="131", "Not_A Brand";v="24"';
+        headers['sec-ch-ua-mobile'] = '?0';
+        headers['sec-ch-ua-platform'] = '"Windows"';
+
+        callback({ requestHeaders: headers });
       });
     };
     
